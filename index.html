@@ -1,0 +1,5130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Generate Image</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap">
+
+  <!-- Bootstrap CSS via CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-..." crossorigin="anonymous">
+  <!-- Bootstrap Vue CSS via CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-vue@2.21.2/dist/bootstrap-vue.min.css" rel="stylesheet">
+  <!-- v-select CSS via CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/vue-select/3.11.2/vue-select.css" integrity="sha512-bHIocRfiCRcIvzrExk2/NpzkoL+Jh3b0ZL9mGJ2oua7UpeDee8NBuNnRc+fsHTc8NIbIQriTOmGxfgYHSygXTg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body>
+  <div id="app">
+    <b-container>
+      <b-row>
+        <b-col md="8">
+        <b-card no-body>
+          <b-card-header>
+            <h5 class="card-title">AI Image Generation Powered By <b-link href="https://stablehorde.net/" target="_blank">Stable Horde</b-link></h5>
+          </b-card-header>
+
+          <b-card-body>
+            <div class="row">
+              <div class="col-md-4">
+                <b-form-group label="Model">
+                  <v-select v-model="modelName" :clearable="false" label="label" :options="modelList" :reduce="option => option.value" class="w-100" />
+                </b-form-group>
+              </div>
+              <div class="col-md-4">
+                <b-form-group label="Artist">
+                  <v-select v-model="artistFilter" :clearable="false" label="label" :options="artistList" multiple :reduce="option => option.value" class="w-100" />
+                </b-form-group>
+              </div>
+              <div class="col-md-4">
+                <b-form-group label="Modifier">
+                  <v-select v-model="modifierFilter" :clearable="false" label="label" :options="modifierList" multiple :reduce="option => option.value" class="w-100" />
+                </b-form-group>
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-12 mt-3">
+                <b-tabs>
+                  <b-tab v-for="category, index in categoryGroups" :key="index" :title="category.name">
+                    <b-tabs vertical nav-wrapper-class="nav-vertical">
+                      <b-tab v-for="item, itemIndex in category.items" :key="itemIndex" :title="item.type">
+                        <div class="row align-items-center">
+                          <span v-for="option, optionIndex in item.options" :key="optionIndex" class="col-md-4 d-flex align-items-center">
+                            <b-form-checkbox v-model="modifierFilter" type="checkbox" class="form-check-input border-0" :value="option" style="width:20px height:20px" />
+                            <label :for="option" class="form-check-label" style="margin-left:7px">
+                              {{ option }}
+                            </label>
+                          </span>
+                        </div>
+                      </b-tab>
+                    </b-tabs>
+                  </b-tab>
+                </b-tabs>
+              </div>
+            </div>
+
+
+            <b-row class="mt-3">
+              <b-col md="9">
+                <b-row>
+                  <div>
+                    <label for="imgPrompt">Prompt text</label>
+                    <b-form-textarea id="imgPrompt" v-model="imgPrompt" placeholder="An HD Image of natural scenery"></b-form-textarea>
+                  </div>
+                </b-row>
+                <b-row>
+                  <div>
+                    <label for="negativePrompt">Negative Prompt</label>
+                    <b-form-textarea id="negativePrompt" v-model="negativePrompt" placeholder="low quality, blur, pixelated"></b-form-textarea>
+                  </div>
+                </b-row>
+              </b-col>
+              <b-col md="3" class="d-flex align-items-center justify-content-center">
+                <b-button variant="primary" @click="generateImage" :disabled="isLoading">
+                  Generate Image
+                  <b-spinner v-if="isLoading" type="border" small class="align-middle"></b-spinner>
+                </b-button>
+              </b-col>
+            </b-row>
+
+          </b-card-body>
+        </b-card>
+      </b-col>
+        <b-col md="4">
+          <div v-if="generatedImageUrl" class="mt-3">
+            <img class="img-fluid" :src="generatedImageUrl" alt="Generated Image">
+          </div>
+        </b-col>
+      </b-row>
+    </b-container>
+  </div>
+
+  <!-- Vue.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+  <!-- Bootstrap Vue JS via CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap-vue@2.21.2/dist/bootstrap-vue.min.js"></script>
+
+
+  <!-- Vue Select JS via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vue-select/3.11.2/vue-select.js" integrity="sha512-OI6jKATh94XFBH81s+TghHXW2/feAIIsMtCBhQqKwERX8uu33RUUsK9Uez1JgtJ4HOU6LbLY751Tod2s6C2ELQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <script>
+    Vue.component('v-select', VueSelect.VueSelect);
+
+    new Vue({
+      el: '#app',
+      data() {
+        const modelList = [{
+            value: 'Deliberate',
+            label: 'Deliberate (24)'
+          },
+          {
+            value: 'ICBINP - I Can\'t Believe It\'s Not Photography',
+            label: 'ICBINP - I Can\'t Believe It\'s Not Photography(23)'
+          },
+          {
+            value: 'Anything Diffusion',
+            label: 'Anything Diffusion (18)'
+          },
+          {
+            value: 'AlbedoBase XL (SDXL)',
+            label: 'AlbedoBase XL (SDXL) (15)'
+          },
+          {
+            value: 'stable_diffusion',
+            label: 'stable_diffusion (15)'
+          },
+          {
+            value: 'BB95 Furry Mix',
+            label: 'BB95 Furry Mix (11)'
+          },
+          {
+            value: 'SDXL 1.0',
+            label: 'SDXL 1.0 (11)'
+          },
+          {
+            value: 'Abyss OrangeMix',
+            label: 'Abyss OrangeMix (9)'
+          },
+          {
+            value: 'Deliberate 3.0',
+            label: 'Deliberate 3.0 (9)'
+          },
+          {
+            value: 'Dreamshaper',
+            label: 'Dreamshaper (9)'
+          },
+          {
+            value: 'Fustercluck',
+            label: 'Fustercluck (9)'
+          },
+          {
+            value: 'Hentai Diffusion',
+            label: 'Hentai Diffusion (9)'
+          },
+          {
+            value: 'ICBINP XL',
+            label: 'ICBINP XL (9)'
+          },
+          {
+            value: 'Inkpunk Diffusion',
+            label: 'Inkpunk Diffusion (9)'
+          },
+          {
+            value: 'NeverEnding Dream',
+            label: 'NeverEnding Dream (9)'
+          },
+          {
+            value: 'RCNZ Gorilla With A Brick',
+            label: 'RCNZ Gorilla With A Brick (9)'
+          },
+          {
+            value: 'Anything Diffusion Inpainting',
+            label: 'Anything Diffusion Inpainting (8)'
+          },
+          {
+            value: 'ChilloutMix',
+            label: 'ChilloutMix (8)'
+          },
+          {
+            value: 'Counterfeit',
+            label: 'Counterfeit (8)'
+          },
+          {
+            value: 'Dark Sushi Mix',
+            label: 'Dark Sushi Mix (8)'
+          },
+          {
+            value: 'Deliberate Inpainting',
+            label: 'Deliberate Inpainting (8)'
+          },
+          {
+            value: 'Epic Diffusion',
+            label: 'Epic Diffusion (8)'
+          },
+          {
+            value: 'Epic Diffusion Inpainting',
+            label: 'Epic Diffusion Inpainting (8)'
+          },
+          {
+            value: 'Fluffusion',
+            label: 'Fluffusion (8)'
+          },
+          {
+            value: 'Furry Epoch',
+            label: 'Furry Epoch (8)'
+          },
+          {
+            value: 'HRL',
+            label: 'HRL (8)'
+          },
+          {
+            value: 'iCoMix',
+            label: 'iCoMix (8)'
+          },
+          {
+            value: 'iCoMix Inpainting',
+            label: 'iCoMix Inpainting (8)'
+          },
+          {
+            value: 'Lawlas\'s yiff mix',
+            label: 'Lawlas\'s yiff mix (8)'
+          },
+          {
+            value: 'MeinaMix',
+            label: 'MeinaMix (8)'
+          },
+          {
+            value: 'PFG',
+            label: 'PFG (8)'
+          },
+          {
+            value: 'PPP',
+            label: 'PPP (8)'
+          },
+          {
+            value: 'RealBiter',
+            label: 'RealBiter (8)'
+          },
+          {
+            value: 'Realistic Vision',
+            label: 'Realistic Vision (8)'
+          },
+          {
+            value: 'stable_diffusion_2.1',
+            label: 'stable_diffusion_2.1 (8)'
+          },
+          {
+            value: 'ToonYou',
+            label: 'ToonYou (8)'
+          },
+          {
+            value: 'URPM',
+            label: 'URPM (8)'
+          },
+          {
+            value: 'Western Animation Diffusion',
+            label: 'Western Animation Diffusion (8)'
+          },
+          {
+            value: 'Yiffy',
+            label: 'Yiffy (8)'
+          },
+          {
+            value: 'Zack3D',
+            label: 'Zack3D (8)'
+          },
+          {
+            value: '3DKX',
+            label: '3DKX (7)'
+          },
+          {
+            value: '526Mix-Animated',
+            label: '526Mix-Animated (7)'
+          },
+          {
+            value: 'AbyssOrangeMix-AfterDark',
+            label: 'AbyssOrangeMix-AfterDark (7)'
+          },
+          {
+            value: 'ACertainThing',
+            label: 'ACertainThing (7)'
+          },
+          {
+            value: 'AIO Pixel Art',
+            label: 'AIO Pixel Art (7)'
+          },
+          {
+            value: 'Analog Diffusion',
+            label: 'Analog Diffusion (7)'
+          },
+          {
+            value: 'Analog Madness',
+            label: 'Analog Madness (7)'
+          },
+          {
+            value: 'Anime Pencil Diffusion',
+            label: 'Anime Pencil Diffusion (7)'
+          },
+          {
+            value: 'Anygen',
+            label: 'Anygen (7)'
+          },
+          {
+            value: 'AnyLoRA',
+            label: 'AnyLoRA (7)'
+          },
+          {
+            value: 'Anything v3',
+            label: 'Anything v3 (7)'
+          },
+          {
+            value: 'Anything v5',
+            label: 'Anything v5 (7)'
+          },
+          {
+            value: 'App Icon Diffusion',
+            label: 'App Icon Diffusion (7)'
+          },
+          {
+            value: 'Art Of Mtg',
+            label: 'Art Of Mtg (7)'
+          },
+          {
+            value: 'Aurora',
+            label: 'Aurora (7)'
+          },
+          {
+            value: 'A-Zovya RPG Inpainting',
+            label: 'A-Zovya RPG Inpainting (7)'
+          },
+          {
+            value: 'Babes',
+            label: 'Babes (7)'
+          },
+          {
+            value: 'BPModel',
+            label: 'BPModel (7)'
+          },
+          {
+            value: 'BRA',
+            label: 'BRA (7)'
+          },
+          {
+            value: 'BweshMix',
+            label: 'BweshMix (7)'
+          },
+          {
+            value: 'CamelliaMix 2.5D',
+            label: 'CamelliaMix 2.5D (7)'
+          },
+          {
+            value: 'Cetus-Mix',
+            label: 'Cetus-Mix (7)'
+          },
+          {
+            value: 'Char',
+            label: 'Char (7)'
+          },
+          {
+            value: 'CharHelper',
+            label: 'CharHelper (7)'
+          },
+          {
+            value: 'Cheese Daddys Landscape Mix',
+            label: 'Cheese Daddys Landscape Mix (7)'
+          },
+          {
+            value: 'ChromaV5',
+            label: 'ChromaV5 (7)'
+          },
+          {
+            value: 'Classic Animation Diffusion',
+            label: 'Classic Animation Diffusion (7)'
+          },
+          {
+            value: 'Colorful',
+            label: 'Colorful (7)'
+          },
+          {
+            value: 'Comic-Diffusion',
+            label: 'Comic-Diffusion (7)'
+          },
+          {
+            value: 'CyberRealistic',
+            label: 'CyberRealistic (7)'
+          },
+          {
+            value: 'CyriousMix',
+            label: 'CyriousMix (7)'
+          },
+          {
+            value: 'Dan Mumford Style',
+            label: 'Dan Mumford Style (7)'
+          },
+          {
+            value: 'Dark Victorian Diffusion',
+            label: 'Dark Victorian Diffusion (7)'
+          },
+          {
+            value: 'DGSpitzer Art Diffusion',
+            label: 'DGSpitzer Art Diffusion (7)'
+          },
+          {
+            value: 'Disco Elysium',
+            label: 'Disco Elysium (7)'
+          },
+          {
+            value: 'Disney Pixar Cartoon Type A',
+            label: 'Disney Pixar Cartoon Type A (7)'
+          },
+          {
+            value: 'DnD Item',
+            label: 'DnD Item (7)'
+          },
+          {
+            value: 'DnD Map Generator',
+            label: 'DnD Map Generator (7)'
+          },
+          {
+            value: 'Double Exposure Diffusion',
+            label: 'Double Exposure Diffusion (7)'
+          },
+          {
+            value: 'Dreamlike Diffusion',
+            label: 'Dreamlike Diffusion (7)'
+          },
+          {
+            value: 'Dreamlike Photoreal',
+            label: 'Dreamlike Photoreal (7)'
+          },
+          {
+            value: 'DreamLikeSamKuvshinov',
+            label: 'DreamLikeSamKuvshinov (7)'
+          },
+          {
+            value: 'DreamShaper Inpainting',
+            label: 'DreamShaper Inpainting (7)'
+          },
+          {
+            value: 'DucHaiten',
+            label: 'DucHaiten (7)'
+          },
+          {
+            value: 'DucHaiten Classic Anime',
+            label: 'DucHaiten Classic Anime (7)'
+          },
+          {
+            value: 'Dungeons and Diffusion',
+            label: 'Dungeons and Diffusion (7)'
+          },
+          {
+            value: 'Dungeons n Waifus',
+            label: 'Dungeons n Waifus (7)'
+          },
+          {
+            value: 'Edge Of Realism',
+            label: 'Edge Of Realism (7)'
+          },
+          {
+            value: 'Eimis Anime Diffusion',
+            label: 'Eimis Anime Diffusion (7)'
+          },
+          {
+            value: 'Elldreth\'s Lucid Mix',
+            label: 'Elldreth\'s Lucid Mix (7)'
+          },
+          {
+            value: 'Elysium Anime',
+            label: 'Elysium Anime (7)'
+          },
+          {
+            value: 'Ether Real Mix',
+            label: 'Ether Real Mix (7)'
+          },
+          {
+            value: 'Experience',
+            label: 'Experience (7)'
+          },
+          {
+            value: 'ExpMix Line',
+            label: 'ExpMix Line (7)'
+          },
+          {
+            value: 'FaeTastic',
+            label: 'FaeTastic (7)'
+          },
+          {
+            value: 'Fantasy Card Diffusion',
+            label: 'Fantasy Card Diffusion (7)'
+          },
+          {
+            value: 'Funko Diffusion',
+            label: 'Funko Diffusion (7)'
+          },
+          {
+            value: 'Galena Redux',
+            label: 'Galena Redux (7)'
+          },
+          {
+            value: 'Ghibli Diffusion',
+            label: 'Ghibli Diffusion (7)'
+          },
+          {
+            value: 'GhostMix',
+            label: 'GhostMix (7)'
+          },
+          {
+            value: 'GorynichMix',
+            label: 'GorynichMix (7)'
+          },
+          {
+            value: 'Grapefruit Hentai',
+            label: 'Grapefruit Hentai (7)'
+          },
+          {
+            value: 'Graphic-Art',
+            label: 'Graphic-Art (7)'
+          },
+          {
+            value: 'GTA5 Artwork Diffusion',
+            label: 'GTA5 Artwork Diffusion (7)'
+          },
+          {
+            value: 'GuFeng',
+            label: 'GuFeng (7)'
+          },
+          {
+            value: 'GuoFeng',
+            label: 'GuoFeng (7)'
+          },
+          {
+            value: 'HASDX',
+            label: 'HASDX (7)'
+          },
+          {
+            value: 'Hassaku',
+            label: 'Hassaku (7)'
+          },
+          {
+            value: 'Hassanblend',
+            label: 'Hassanblend (7)'
+          },
+          {
+            value: 'Healy\'s Anime Blend',
+            label: 'Healy\'s Anime Blend (7)'
+          },
+          {
+            value: 'Henmix Real',
+            label: 'Henmix Real (7)'
+          },
+          {
+            value: 'Illuminati Diffusion',
+            label: 'Illuminati Diffusion (7)'
+          },
+          {
+            value: 'Jim Eidomode',
+            label: 'Jim Eidomode (7)'
+          },
+          {
+            value: 'JoMad Diffusion',
+            label: 'JoMad Diffusion (7)'
+          },
+          {
+            value: 'JWST Deep Space Diffusion',
+            label: 'JWST Deep Space Diffusion (7)'
+          },
+          {
+            value: 'Kenshi',
+            label: 'Kenshi (7)'
+          },
+          {
+            value: 'Laolei New Berry Protogen Mix',
+            label: 'Laolei New Berry Protogen Mix (7)'
+          },
+          {
+            value: 'Liberty',
+            label: 'Liberty (7)'
+          },
+          {
+            value: 'Lyriel',
+            label: 'Lyriel (7)'
+          },
+          {
+            value: 'majicMIX realistic',
+            label: 'majicMIX realistic (7)'
+          },
+          {
+            value: 'Mega Merge Diffusion',
+            label: 'Mega Merge Diffusion (7)'
+          },
+          {
+            value: 'Microcritters',
+            label: 'Microcritters (7)'
+          },
+          {
+            value: 'Microworlds',
+            label: 'Microworlds (7)'
+          },
+          {
+            value: 'Midjourney PaintArt',
+            label: 'Midjourney PaintArt (7)'
+          },
+          {
+            value: 'Mistoon Amethyst',
+            label: 'Mistoon Amethyst (7)'
+          },
+          {
+            value: 'ModernArt Diffusion',
+            label: 'ModernArt Diffusion (7)'
+          },
+          {
+            value: 'Moedel',
+            label: 'Moedel (7)'
+          },
+          {
+            value: 'MoistMix',
+            label: 'MoistMix (7)'
+          },
+          {
+            value: 'MoonMix Fantasy',
+            label: 'MoonMix Fantasy (7)'
+          },
+          {
+            value: 'Movie Diffusion',
+            label: 'Movie Diffusion (7)'
+          },
+          {
+            value: 'Neurogen',
+            label: 'Neurogen (7)'
+          },
+          {
+            value: 'Nitro Diffusion',
+            label: 'Nitro Diffusion (7)'
+          },
+          {
+            value: 'OpenJourney Diffusion',
+            label: 'OpenJourney Diffusion (7)'
+          },
+          {
+            value: 'Openniji',
+            label: 'Openniji (7)'
+          },
+          {
+            value: 'Papercut Diffusion',
+            label: 'Papercut Diffusion (7)'
+          },
+          {
+            value: 'Pastel Mix',
+            label: 'Pastel Mix (7)'
+          },
+          {
+            value: 'Perfect World',
+            label: 'Perfect World (7)'
+          },
+          {
+            value: 'Poison',
+            label: 'Poison (7)'
+          },
+          {
+            value: 'Pokemon3D',
+            label: 'Pokemon3D (7)'
+          },
+          {
+            value: 'PortraitPlus',
+            label: 'PortraitPlus (7)'
+          },
+          {
+            value: 'Pretty 2.5D',
+            label: 'Pretty 2.5D (7)'
+          },
+          {
+            value: 'Project Unreal Engine 5',
+            label: 'Project Unreal Engine 5 (7)'
+          },
+          {
+            value: 'ProtoGen',
+            label: 'ProtoGen (7)'
+          },
+          {
+            value: 'Protogen Anime',
+            label: 'Protogen Anime (7)'
+          },
+          {
+            value: 'Protogen Infinity',
+            label: 'Protogen Infinity (7)'
+          },
+          {
+            value: 'Pulp Vector Art',
+            label: 'Pulp Vector Art (7)'
+          },
+          {
+            value: 'Ranma Diffusion',
+            label: 'Ranma Diffusion (7)'
+          },
+          {
+            value: 'RCNZ Dumb Monkey',
+            label: 'RCNZ Dumb Monkey (7)'
+          },
+          {
+            value: 'Real Dos Mix',
+            label: 'Real Dos Mix (7)'
+          },
+          {
+            value: 'Realisian',
+            label: 'Realisian (7)'
+          },
+          {
+            value: 'Realism Engine',
+            label: 'Realism Engine (7)'
+          },
+          {
+            value: 'Realistic Vision Inpainting',
+            label: 'Realistic Vision Inpainting (7)'
+          },
+          {
+            value: 'Reliberate',
+            label: 'Reliberate (7)'
+          },
+          {
+            value: 'Rev Animated',
+            label: 'Rev Animated (7)'
+          },
+          {
+            value: 'Robo-Diffusion',
+            label: 'Robo-Diffusion (7)'
+          },
+          {
+            value: 'RPG',
+            label: 'RPG (7)'
+          },
+          {
+            value: 'Samaritan 3d Cartoon',
+            label: 'Samaritan 3d Cartoon (7)'
+          },
+          {
+            value: 'Sci-Fi Diffusion',
+            label: 'Sci-Fi Diffusion (7)'
+          },
+          {
+            value: 'SD-Silicon',
+            label: 'SD-Silicon (7)'
+          },
+          {
+            value: 'Seek.art MEGA',
+            label: 'Seek.art MEGA (7)'
+          },
+          {
+            value: 'Something',
+            label: 'Something (7)'
+          },
+          {
+            value: 'SweetBoys 2D',
+            label: 'SweetBoys 2D (7)'
+          },
+          {
+            value: 'Trinart Characters',
+            label: 'Trinart Characters (7)'
+          },
+          {
+            value: 'Tron Legacy Diffusion',
+            label: 'Tron Legacy Diffusion (7)'
+          },
+          {
+            value: 'Uhmami',
+            label: 'Uhmami (7)'
+          },
+          {
+            value: 'Ultraskin',
+            label: 'Ultraskin (7)'
+          },
+          {
+            value: 'UMI Olympus',
+            label: 'UMI Olympus (7)'
+          },
+          {
+            value: 'Unstable Ink Dream',
+            label: 'Unstable Ink Dream (7)'
+          },
+          {
+            value: 'Vector Art',
+            label: 'Vector Art (7)'
+          },
+          {
+            value: 'vectorartz',
+            label: 'vectorartz (7)'
+          },
+          {
+            value: 'VinteProtogenMix',
+            label: 'VinteProtogenMix (7)'
+          },
+          {
+            value: 'waifu_diffusion',
+            label: 'waifu_diffusion (7)'
+          },
+          {
+            value: 'Woop-Woop Photo',
+            label: 'Woop-Woop Photo (7)'
+          },
+          {
+            value: 'Zeipher Female Model',
+            label: 'Zeipher Female Model (7)'
+          },
+          {
+            value: 'A to Zovya RPG',
+            label: 'A to Zovya RPG (2)'
+          },
+        ]
+
+        const artistStyle = [{
+            artist: 'Pablo Picasso',
+            style: 'sculptor, painter'
+          },
+          {
+            artist: 'Alvar Aalto',
+            style: 'architecture, high contrast'
+          },
+          {
+            artist: 'Slim Aarons',
+            style: 'vibrant, photography, scene'
+          },
+          {
+            artist: 'Edwin Austin Abbey',
+            style: 'scene, realism'
+          },
+          {
+            artist: 'Gertrude Abercrombie',
+            style: 'surrealism, dark'
+          },
+          {
+            artist: 'Marina Abramovic',
+            style: 'scene, photography'
+          },
+          {
+            artist: 'Tomma Abts',
+            style: 'abstract, angular'
+          },
+          {
+            artist: 'Vito Acconci',
+            style: 'dark, installation, architecture'
+          },
+          {
+            artist: 'Andreas Achenbach',
+            style: 'landscape, seascape, romanticism'
+          },
+          {
+            artist: 'Norman Ackroyd',
+            style: 'landscape, monochromatic, high contrast'
+          },
+          {
+            artist: 'Ansel Adams',
+            style: 'monochromatic, high contrast'
+          },
+          {
+            artist: 'Arthur Adams',
+            style: 'detailed, clean'
+          },
+          {
+            artist: 'Neal Adams',
+            style: 'comics'
+          },
+          {
+            artist: 'Josh Adamski',
+            style: 'landscape, vibrant'
+          },
+          {
+            artist: 'Charles Addams',
+            style: 'monochromatic, scene'
+          },
+          {
+            artist: 'Etel Adnan',
+            style: 'abstract, vibrant, landscape'
+          },
+          {
+            artist: 'Mattias Adolfsson',
+            style: 'detailed, whimsical, watercolor'
+          },
+          {
+            artist: 'Alena Aenami',
+            style: 'vibrant, landscape, digital'
+          },
+          {
+            artist: 'Pieter Aertsen',
+            style: 'detailed, scene, renaissance'
+          },
+          {
+            artist: 'Hilma af Klint',
+            style: 'abstract, low contrast'
+          },
+          {
+            artist: 'Affandi',
+            style: 'expressionism, messy, abstract'
+          },
+          {
+            artist: 'Leonid Afremov',
+            style: 'vibrant, stained glass, impressionism'
+          },
+          {
+            artist: 'Yaacov Agam',
+            style: 'vibrant, colorful, abstract'
+          },
+          {
+            artist: 'Eileen Agar',
+            style: 'vibrant, abstract, collage'
+          },
+          {
+            artist: 'Jacques-Laurent Agasse',
+            style: 'landscape, animals'
+          },
+          {
+            artist: 'Craigie Aitchison',
+            style: 'vibrant, primitivism, figurativism'
+          },
+          {
+            artist: 'Doug Aitken',
+            style: 'installation, photography, sculpture'
+          },
+          {
+            artist: 'Ivan Aivazovsky',
+            style: 'dark, landscape, romanticism'
+          },
+          {
+            artist: 'David Aja',
+            style: 'high contrast, comics'
+          },
+          {
+            artist: 'Sherry Akrami',
+            style: 'monochromatic, photography, surrealism'
+          },
+          {
+            artist: 'Rashad Alakbarov',
+            style: 'installation, light'
+          },
+          {
+            artist: 'Anni Albers',
+            style: 'textile, bauhaus'
+          },
+          {
+            artist: 'Josef Albers',
+            style: 'bauhaus, high contrast'
+          },
+          {
+            artist: 'Alessio Albi',
+            style: 'photography, portrait'
+          },
+          {
+            artist: 'Ivan Albright',
+            style: 'dark, messy, impressionism'
+          },
+          {
+            artist: 'Rafael Albuquerque',
+            style: 'comics, high contrast'
+          },
+          {
+            artist: 'Miles Aldridge',
+            style: 'photography, portrait, surrealism'
+          },
+          {
+            artist: 'Alex Alemany',
+            style: 'symbolism, magical realism, surrealism'
+          },
+          {
+            artist: 'John White Alexander',
+            style: 'portrait, art nouveau, symbolism'
+          },
+          {
+            artist: 'Helen Allingham',
+            style: 'watercolor, landscape, scene'
+          },
+          {
+            artist: 'Alessandro Allori',
+            style: 'portrait, renaissance'
+          },
+          {
+            artist: 'Mike Allred',
+            style: 'comics, vibrant'
+          },
+          {
+            artist: 'Nick Alm',
+            style: 'figurativism, realism, portrait'
+          },
+          {
+            artist: 'Lawrence Alma-Tadema',
+            style: 'scene, romanticism'
+          },
+          {
+            artist: 'Lilia Alvarado',
+            style: 'photography, scene, portrait'
+          },
+          {
+            artist: 'Emil Alzamora',
+            style: 'sculpture'
+          },
+          {
+            artist: 'Yoshitaka Amano',
+            style: 'messy, dark'
+          },
+          {
+            artist: 'Ghada Amer',
+            style: 'abstract, portrait'
+          },
+          {
+            artist: 'Cuno Amiet',
+            style: 'impressionism, portrait, landscape'
+          },
+          {
+            artist: 'Rick Amor',
+            style: 'landscape, streetscape'
+          },
+          {
+            artist: 'Fernando Amorsolo',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Jay Anacleto',
+            style: 'comics, detailed'
+          },
+          {
+            artist: 'El Anatsui',
+            style: 'abstract, sculpture, texture'
+          },
+          {
+            artist: 'Anna Ancher',
+            style: 'impressionism, scene'
+          },
+          {
+            artist: 'Michael Ancher',
+            style: 'impressionism, realism, scene'
+          },
+          {
+            artist: 'Hans Christian Andersen',
+            style: 'romanticism, art nouveau'
+          },
+          {
+            artist: 'Sarah Andersen',
+            style: 'cartoon, comics, high contrast'
+          },
+          {
+            artist: 'Richard Anderson',
+            style: 'digital, fantasy, dark'
+          },
+          {
+            artist: 'Sophie Anderson',
+            style: 'character, portrait'
+          },
+          {
+            artist: 'Wes Anderson',
+            style: 'vibrant, whimsical, photography'
+          },
+          {
+            artist: 'Tadao Ando',
+            style: 'angular, architecture'
+          },
+          {
+            artist: 'Alex Andreev',
+            style: 'landscape, high contrast, vibrant'
+          },
+          {
+            artist: 'Esao Andrews',
+            style: 'surrealism, dark'
+          },
+          {
+            artist: 'Fra Angelico',
+            style: 'renaissance, scene'
+          },
+          {
+            artist: 'Charles Angrand',
+            style: 'impressionism, clean'
+          },
+          {
+            artist: 'Sofonisba Anguissola',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Miss Aniela',
+            style: 'whimsical, photography, scene'
+          },
+          {
+            artist: 'Albrecht Anker',
+            style: 'realism, scene, portrait'
+          },
+          {
+            artist: 'Mary Anning',
+            style: 'scene, landscape'
+          },
+          {
+            artist: 'Louis Anquetin',
+            style: 'impressionism, portrait, scene'
+          },
+          {
+            artist: 'Mary Jane Ansell',
+            style: 'portrait, still life, photorealism'
+          },
+          {
+            artist: 'Martin Ansin',
+            style: 'detailed, high contrast'
+          },
+          {
+            artist: 'Janine Antoni',
+            style: 'sculpture'
+          },
+          {
+            artist: 'Chiho Aoshima',
+            style: 'pop art, colorful, whimsical'
+          },
+          {
+            artist: 'Sabbas Apterus',
+            style: 'digital, dark, scene'
+          },
+          {
+            artist: 'Ron Arad',
+            style: 'architecture'
+          },
+          {
+            artist: 'Sergio Aragones',
+            style: 'cartoon, comics'
+          },
+          {
+            artist: 'Hirohiko Araki',
+            style: 'manga'
+          },
+          {
+            artist: 'Nobuyoshi Araki',
+            style: 'photography, scene'
+          },
+          {
+            artist: 'Shinji Aramaki',
+            style: 'anime, scene, character'
+          },
+          {
+            artist: 'Diane Arbus',
+            style: 'photography, monochromatic, scene'
+          },
+          {
+            artist: 'Cory Arcangel',
+            style: 'high contrast, colorful, installation'
+          },
+          {
+            artist: 'Archillect',
+            style: 'monochromatic, dark, photography'
+          },
+          {
+            artist: 'Alexander Archipenko',
+            style: 'sculpture, abstract, cubism'
+          },
+          {
+            artist: 'Giuseppe Arcimboldo',
+            style: 'dark, fruit'
+          },
+          {
+            artist: 'Mordecai Ardon',
+            style: 'abstract, figurativism, expressionism'
+          },
+          {
+            artist: 'Steve Argyle',
+            style: 'fantasy, character'
+          },
+          {
+            artist: 'Mark Arian',
+            style: 'character, realism'
+          },
+          {
+            artist: 'Abram Efimovich Arkhipov',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Howard Arkley',
+            style: 'architecture, vibrant, colorful'
+          },
+          {
+            artist: 'Rolf Armstrong',
+            style: 'character, vibrant, art nouveau'
+          },
+          {
+            artist: 'Alois Arnegger',
+            style: 'romanticism, landscape'
+          },
+          {
+            artist: 'Eve Arnold',
+            style: 'photography, monochromatic'
+          },
+          {
+            artist: 'Gerd Arntz',
+            style: 'graphic design, high contrast, flat colors'
+          },
+          {
+            artist: 'Floris Arntzenius',
+            style: 'realism, streetscape, scene'
+          },
+          {
+            artist: 'Guy Aroch',
+            style: 'photography, fashion, portrait'
+          },
+          {
+            artist: 'Ben Aronson',
+            style: 'cityscape, streetscape, realism'
+          },
+          {
+            artist: 'Jean Arp',
+            style: 'abstract, high contrast'
+          },
+          {
+            artist: 'Agostino Arrivabene',
+            style: 'renaissance, dark, surrealism'
+          },
+          {
+            artist: 'Daniel Arsham',
+            style: 'sculpture, installation'
+          },
+          {
+            artist: 'Stanley Artgerm Lau',
+            style: 'character'
+          },
+          {
+            artist: 'Miki Asai',
+            style: 'photography, vibrant'
+          },
+          {
+            artist: 'Inio Asano',
+            style: 'manga, scene'
+          },
+          {
+            artist: 'Clemens Ascher',
+            style: 'photography, vibrant, high contrast'
+          },
+          {
+            artist: 'Henry Asencio',
+            style: 'dark, messy, expressionism'
+          },
+          {
+            artist: 'Eugene Atget',
+            style: 'photography, surrealism, monochromatic'
+          },
+          {
+            artist: 'Andrew Atroshenko',
+            style: 'portrait, impressionism, figurativism'
+          },
+          {
+            artist: 'John James Audubon',
+            style: 'birds, realism, watercolor'
+          },
+          {
+            artist: 'Frank Auerbach',
+            style: 'dark, expressionism'
+          },
+          {
+            artist: 'George Ault',
+            style: 'surrealism, dark, angular'
+          },
+          {
+            artist: 'Hendrick Avercamp',
+            style: 'landscape, scene'
+          },
+          {
+            artist: 'Alexandr Averin',
+            style: 'scene, impressionism'
+          },
+          {
+            artist: 'Milton Avery',
+            style: 'low contrast, abstract'
+          },
+          {
+            artist: 'Tex Avery',
+            style: 'whimsical, storybook realism'
+          },
+          {
+            artist: 'Deborah Azzopardi',
+            style: 'pop art, cartoon, vibrant'
+          },
+          {
+            artist: 'Carrie Ann Baade',
+            style: 'detailed, surrealism, pop art'
+          },
+          {
+            artist: 'Ingrid Baars',
+            style: 'high contrast, photography, dark'
+          },
+          {
+            artist: 'Chris Bachalo',
+            style: 'comics, high contrast'
+          },
+          {
+            artist: 'Anne Bachelier',
+            style: 'portrait, surrealism'
+          },
+          {
+            artist: 'Harriet Backer',
+            style: 'scene, impressionism'
+          },
+          {
+            artist: 'Francis Bacon',
+            style: 'expressionism'
+          },
+          {
+            artist: 'Peter Bagge',
+            style: 'comics, whimsical, high contrast'
+          },
+          {
+            artist: 'Tom Bagshaw',
+            style: 'character, dark, fantasy'
+          },
+          {
+            artist: 'Alice Bailly',
+            style: 'cubism, high contrast, fauvism'
+          },
+          {
+            artist: 'Karol Bak',
+            style: 'character, vibrant'
+          },
+          {
+            artist: 'Ralph Bakshi',
+            style: 'cartoon'
+          },
+          {
+            artist: 'Leon Bakst',
+            style: 'romanticism, art nouveau'
+          },
+          {
+            artist: 'Christopher Balaskas',
+            style: 'vibrant, digital, landscape'
+          },
+          {
+            artist: 'Jamie Baldridge',
+            style: 'photography, dark'
+          },
+          {
+            artist: 'Hans Baldung',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Ronald Balfour',
+            style: 'art deco, art nouveau, watercolor'
+          },
+          {
+            artist: 'Emily Balivet',
+            style: 'detailed, art nouveau, colorful'
+          },
+          {
+            artist: 'Peder Balke',
+            style: 'landscape, seascape, cloudscape'
+          },
+          {
+            artist: 'Giacomo Balla',
+            style: 'cubism, abstract'
+          },
+          {
+            artist: 'Balthus',
+            style: 'scene, dark, watercolor'
+          },
+          {
+            artist: 'Hans Baluschek',
+            style: 'dark, cityscape, realism'
+          },
+          {
+            artist: 'Benedick Bana',
+            style: 'character, sci-fi, messy'
+          },
+          {
+            artist: 'Banksy',
+            style: 'street art, graffiti, high contrast'
+          },
+          {
+            artist: 'Giorgio Barbarelli da Castelfranco',
+            style: 'scene, portrait, renaissance'
+          },
+          {
+            artist: 'Thomas Barbey',
+            style: 'photography, monochromatic, surrealism'
+          },
+          {
+            artist: 'George Barbier',
+            style: 'art deco, art nouveau'
+          },
+          {
+            artist: 'Cicely Mary Barker',
+            style: 'fantasy, whimsical, character'
+          },
+          {
+            artist: 'Clive Barker',
+            style: 'expressionism, pop art, abstract'
+          },
+          {
+            artist: 'Carl Barks',
+            style: 'cartoon'
+          },
+          {
+            artist: 'Ernst Barlach',
+            style: 'realism, expressionism, monochromatic'
+          },
+          {
+            artist: 'Phyllida Barlow',
+            style: 'sculpture, installation, expressionism'
+          },
+          {
+            artist: 'Wayne Barlowe',
+            style: 'sci-fi, fantasy, dark'
+          },
+          {
+            artist: 'Ernie Barnes',
+            style: 'melanin, scene, expressionism'
+          },
+          {
+            artist: 'Will Barnet',
+            style: 'high contrast, scene'
+          },
+          {
+            artist: 'Wilhelmina Barns-Graham',
+            style: 'abstract'
+          },
+          {
+            artist: 'Angela Barrett',
+            style: "children's illustration, scene"
+          },
+          {
+            artist: 'Lynda Barry',
+            style: 'cartoon, messy'
+          },
+          {
+            artist: 'Paul Barson',
+            style: 'dark, photography'
+          },
+          {
+            artist: 'Bo Bartlett',
+            style: 'realism, scene, clean'
+          },
+          {
+            artist: 'Peter Basch',
+            style: 'photography, monochromatic, figurativism'
+          },
+          {
+            artist: 'Georg Baselitz',
+            style: 'messy, expressionism, figurativism'
+          },
+          {
+            artist: 'Gary Baseman',
+            style: 'pop art, surrealism, cartoon'
+          },
+          {
+            artist: 'Jean-Michel Basquiat',
+            style: 'expressionism, messy'
+          },
+          {
+            artist: 'Jacopo Bassano',
+            style: 'renaissance, scene'
+          },
+          {
+            artist: 'Willem Basse',
+            style: 'romanticism'
+          },
+          {
+            artist: 'Lillian Bassman',
+            style: 'photography, monochromatic, fashion'
+          },
+          {
+            artist: 'Jules Bastien-Lepage',
+            style: 'realism, impressionism'
+          },
+          {
+            artist: 'Robert Bateman',
+            style: 'animals, nature, realism'
+          },
+          {
+            artist: 'David Bates',
+            style: 'high contrast, landscape'
+          },
+          {
+            artist: 'John Batho',
+            style: 'photography, abstract, monochromatic'
+          },
+          {
+            artist: 'Pompeo Batoni',
+            style: 'baroque, portrait, scene'
+          },
+          {
+            artist: 'John Bauer',
+            style: 'whimsical, watercolor'
+          },
+          {
+            artist: 'Casey Baugh',
+            style: 'portrait, expressionism, realism'
+          },
+          {
+            artist: 'Gustave Baumann',
+            style: 'realism, landscape, nature'
+          },
+          {
+            artist: 'Willi Baumeister',
+            style: 'abstract'
+          },
+          {
+            artist: 'Edward Bawden',
+            style: 'watercolor, landscape, cityscape'
+          },
+          {
+            artist: 'Herbert Bayer',
+            style: 'graphic design, colorful, vibrant'
+          },
+          {
+            artist: 'Frederic Bazille',
+            style: 'impressionism, scene, still life'
+          },
+          {
+            artist: 'Gifford Beal',
+            style: 'impressionism'
+          },
+          {
+            artist: 'Mary Beale',
+            style: 'portrait, realism, baroque'
+          },
+          {
+            artist: 'Alan Bean',
+            style: 'space, personality, sci-fi'
+          },
+          {
+            artist: 'Romare Bearden',
+            style: 'realism, cubism, vibrant'
+          },
+          {
+            artist: 'Aubrey Beardsley',
+            style: 'high contrast, art nouveau'
+          },
+          {
+            artist: 'Cecil Beaton',
+            style: 'photography, portrait, monochromatic'
+          },
+          {
+            artist: 'Kate Beaton',
+            style: 'comics, cartoon'
+          },
+          {
+            artist: 'Jacques-Firmin Beauvarlet',
+            style: 'romanticism'
+          },
+          {
+            artist: 'Cecilia Beaux',
+            style: 'impressionism, portrait'
+          },
+          {
+            artist: 'Alison Bechdel',
+            style: 'comics, cartoon'
+          },
+          {
+            artist: 'Jasmine Becket-Griffith',
+            style: 'fantasy, portrait, whimsical'
+          },
+          {
+            artist: 'Max Beckmann',
+            style: 'high contrast, expressionism'
+          },
+          {
+            artist: 'Vanessa Beecroft',
+            style: 'nudity, character, portrait'
+          },
+          {
+            artist: 'Beeple',
+            style: 'digital'
+          },
+          {
+            artist: 'Zdzislaw Beksinski',
+            style: 'surrealism, dark, horror'
+          },
+          {
+            artist: 'Julie Bell',
+            style: 'fantasy, nature, dragons'
+          },
+          {
+            artist: 'Vanessa Bell',
+            style: 'fauvism, portrait'
+          },
+          {
+            artist: 'Hans Bellmer',
+            style: 'photography, dark, surrealism'
+          },
+          {
+            artist: 'Bernardo Bellotto',
+            style: 'landscape, cityscape, architecture'
+          },
+          {
+            artist: 'George Bellows',
+            style: 'realism, impressionism'
+          },
+          {
+            artist: 'Lynda Benglis',
+            style: 'sculpture, installation, colorful'
+          },
+          {
+            artist: 'Jean-Joseph Benjamin-Constant',
+            style: 'romanticism, scene, character'
+          },
+          {
+            artist: 'Albert Benois',
+            style: 'landscape, watercolor, romanticism'
+          },
+          {
+            artist: 'Alexandre Benois',
+            style: 'scene, landscape, watercolor'
+          },
+          {
+            artist: 'Ambrosius Benson',
+            style: 'renaissance, portrait, scene'
+          },
+          {
+            artist: 'Frank Weston Benson',
+            style: 'impressionism, scene'
+          },
+          {
+            artist: 'Thomas Hart Benton',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Stan Berenstain',
+            style: "children's illustration, cartoon"
+          },
+          {
+            artist: 'Richard Bergh',
+            style: 'landscape, portrait, romanticism'
+          },
+          {
+            artist: 'Don Bergland',
+            style: 'surrealism'
+          },
+          {
+            artist: 'Jody Bergsma',
+            style: 'watercolor, fantasy, detailed'
+          },
+          {
+            artist: 'John Berkey',
+            style: 'fantasy, space, sci-fi'
+          },
+          {
+            artist: 'Emile Bernard',
+            style: 'impressionism, scene'
+          },
+          {
+            artist: 'Ruth Bernhard',
+            style: 'monochromatic, photography, nudity'
+          },
+          {
+            artist: 'Gian Lorenzo Bernini',
+            style: 'baroque, sculpture'
+          },
+          {
+            artist: 'Harry Bertoia',
+            style: 'sculpture, texture'
+          },
+          {
+            artist: 'Elsa Beskow',
+            style: 'whimsical, art nouveau, beatrix potter'
+          },
+          {
+            artist: 'Joachim Beuckelaer',
+            style: 'scene, still life'
+          },
+          {
+            artist: 'Joseph Beuys',
+            style: 'abstract, figurativism, photography'
+          },
+          {
+            artist: 'Marta Bevacqua',
+            style: 'photography, portrait, scene'
+          },
+          {
+            artist: 'Simone Bianchi',
+            style: 'comics'
+          },
+          {
+            artist: 'Alberto Biasi',
+            style: 'abstract, angular'
+          },
+          {
+            artist: 'Albert Bierstadt',
+            style: 'landscape, romanticism'
+          },
+          {
+            artist: 'John T. Biggers',
+            style: 'melanin, abstract, symbolism'
+          },
+          {
+            artist: 'Enki Bilal',
+            style: 'detailed, sci-fi, comics'
+          },
+          {
+            artist: 'Ivan Bilibin',
+            style: 'art nouveau'
+          },
+          {
+            artist: 'Guy Billout',
+            style: 'clean, surrealism'
+          },
+          {
+            artist: 'Butcher Billy',
+            style: 'graphic design, pop art, vibrant'
+          },
+          {
+            artist: 'Ilse Bing',
+            style: 'photography, monochromatic'
+          },
+          {
+            artist: 'Xavier Blum',
+            style: 'nudity, surrealism, dark'
+          },
+          {
+            artist: 'David Octavius Hill',
+            style: 'photography, monochromatic, historic'
+          },
+          {
+            artist: 'Clarence Holbrook Carter',
+            style: 'surrealism, symbolism, scene'
+          },
+          {
+            artist: 'Paul Cadmus',
+            style: 'realism, figurativism'
+          },
+          {
+            artist: 'Luciano Caggianello',
+            style: 'fantasy, nature'
+          },
+          {
+            artist: 'Ivan Aivazovsky',
+            style: 'romanticism, seascape'
+          },
+          {
+            artist: 'Mariano Akerman',
+            style: 'fantasy, scene, architecture'
+          },
+          {
+            artist: 'Leonid Afremov',
+            style: 'impressionism, vibrant, night'
+          },
+          {
+            artist: 'Giorgio de Chirico',
+            style: 'surrealism, architecture'
+          },
+          {
+            artist: 'Theophile Alexandre Steinlen',
+            style: 'art nouveau, scene, cats'
+          },
+          {
+            artist: 'Oyvind Torseter',
+            style: "children's illustration, cartoon"
+          },
+          {
+            artist: 'De Es Schwertberger',
+            style: 'surrealism, vibrant, detailed'
+          },
+          {
+            artist: 'Ray Caesar',
+            style: 'surrealism, dark, detailed'
+          },
+          {
+            artist: 'Ansel Adams',
+            style: 'photography, landscape, monochromatic'
+          },
+          {
+            artist: 'Yoshitaka Amano',
+            style: 'fantasy, detailed, anime'
+          },
+          {
+            artist: 'Chris Achilleos',
+            style: 'fantasy, sci-fi, pinup'
+          },
+          {
+            artist: 'Alphonse Mucha',
+            style: 'art nouveau, portrait'
+          },
+          {
+            artist: 'Riccardo Accurso',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Roberto Ferri',
+            style: 'baroque, surrealism, dark'
+          },
+          {
+            artist: 'Zviane',
+            style: 'comics, cartoon'
+          },
+          {
+            artist: 'Michael Whelan',
+            style: 'fantasy, sci-fi, detailed'
+          },
+          {
+            artist: 'Matt Wagner',
+            style: 'comics'
+          },
+          {
+            artist: 'James Whistler',
+            style: 'impressionism, tonalism'
+          },
+          {
+            artist: 'Theodor Severin Kittelsen',
+            style: 'fantasy, dark, detailed'
+          },
+          {
+            artist: 'Victor Horta',
+            style: 'art nouveau, architecture'
+          },
+          {
+            artist: 'Harry Clarke',
+            style: 'art nouveau, detailed, stained glass'
+          },
+          {
+            artist: 'Jesse Wilcox Smith',
+            style: "children's illustration, portrait"
+          },
+          {
+            artist: 'Maggie Taylor',
+            style: 'digital, surrealism'
+          },
+          {
+            artist: 'John Taylor Arms',
+            style: 'etching, detailed'
+          },
+          {
+            artist: 'Samuel John Peploe',
+            style: 'impressionism, still life'
+          },
+          {
+            artist: 'Elsie Driggs',
+            style: 'precisionism'
+          },
+          {
+            artist: 'Max Ernst',
+            style: 'surrealism, dark'
+          },
+          {
+            artist: 'Hugo van der Goes',
+            style: 'renaissance, detailed, portrait'
+          },
+          {
+            artist: 'Hieronymus Bosch',
+            style: 'renaissance, surrealism, detailed'
+          },
+          {
+            artist: 'Egon Schiele',
+            style: 'expressionism, figurativism, detailed'
+          },
+          {
+            artist: 'Camille Pissarro',
+            style: 'impressionism, landscape'
+          },
+          {
+            artist: 'Walter Crane',
+            style: 'art nouveau, illustration, vibrant'
+          },
+          {
+            artist: 'Tina Modotti',
+            style: 'photography, monochromatic, portrait'
+          },
+          {
+            artist: 'Richard Avedon',
+            style: 'photography, portrait'
+          },
+          {
+            artist: 'Tamara de Lempicka',
+            style: 'art deco, portrait'
+          },
+          {
+            artist: 'John Singer Sargent',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Gustav Klimt',
+            style: 'art nouveau, symbolism, portrait'
+          },
+          {
+            artist: 'Alphonse Legros',
+            style: 'realism, etching'
+          },
+          {
+            artist: 'Giovanni Boldini',
+            style: 'realism, portrait, impressionism'
+          },
+          {
+            artist: 'Eugene Grasset',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'John William Waterhouse',
+            style: 'pre-raphaelite, romanticism'
+          },
+          {
+            artist: 'Gustave Dore',
+            style: 'realism, detailed, illustration'
+          },
+          {
+            artist: 'Arthur Rackham',
+            style: 'fantasy, illustration'
+          },
+          {
+            artist: 'Katsushika Hokusai',
+            style: 'ukiyo-e, landscape, scene'
+          },
+          {
+            artist: 'Aubrey Beardsley',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'William Morris',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Kay Nielsen',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Edmund Dulac',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Harry Clarke',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Willy Pogany',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Jessie M. King',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Mikhail Vrubel',
+            style: 'symbolism, art nouveau, portrait'
+          },
+          {
+            artist: 'Ivan Bilibin',
+            style: 'art nouveau, illustration'
+          },
+          {
+            artist: 'Victor Vasnetsov',
+            style: 'symbolism, art nouveau, portrait'
+          },
+          {
+            artist: 'Ilya Repin',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Konstantin Makovsky',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Valentin Serov',
+            style: 'impressionism, portrait'
+          },
+          {
+            artist: 'Isaac Levitan',
+            style: 'realism, landscape'
+          },
+          {
+            artist: 'Arkhip Kuindzhi',
+            style: 'realism, landscape'
+          },
+          {
+            artist: 'Ivan Shishkin',
+            style: 'realism, landscape'
+          },
+          {
+            artist: 'Vasily Polenov',
+            style: 'realism, landscape'
+          },
+          {
+            artist: 'Ivan Aivazovsky',
+            style: 'romanticism, seascape'
+          },
+          {
+            artist: 'Isaak Brodsky',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Nicholas Roerich',
+            style: 'symbolism, landscape'
+          },
+          {
+            artist: 'Kuzma Petrov-Vodkin',
+            style: 'symbolism, portrait'
+          },
+          {
+            artist: 'Marc Chagall',
+            style: 'modernism, surrealism'
+          },
+          {
+            artist: 'Kazimir Malevich',
+            style: 'suprematism, abstract'
+          },
+          {
+            artist: 'Wassily Kandinsky',
+            style: 'abstract, expressionism'
+          },
+          {
+            artist: 'Piet Mondrian',
+            style: 'neoplasticism, abstract'
+          },
+          {
+            artist: 'Eugene Delacroix',
+            style: 'romanticism, scene'
+          },
+          {
+            artist: 'Beauford Delaney',
+            style: 'impressionism, abstract, colorful'
+          },
+          {
+            artist: 'Janet Delaney',
+            style: 'photography, streetscape, scene'
+          },
+          {
+            artist: 'Robert Delaunay',
+            style: 'abstract, cubism, vibrant'
+          },
+          {
+            artist: 'Sonia Delaunay',
+            style: 'cubism, fauvism, abstract'
+          },
+          {
+            artist: 'Gabriele Dell\'otto',
+            style: 'comics, fantasy'
+          },
+          {
+            artist: 'Piero della Francesca',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Luca della Robbia',
+            style: 'sculpture, renaissance'
+          },
+          {
+            artist: 'Nicolas Delort',
+            style: 'monochromatic, detailed, fantasy'
+          },
+          {
+            artist: 'Paul Delvaux',
+            style: 'surrealism, scene'
+          },
+          {
+            artist: 'Jean Delville',
+            style: 'fantasy, symbolism'
+          },
+          {
+            artist: 'Wim Delvoye',
+            style: 'sculpture, detailed, installation'
+          },
+          {
+            artist: 'Aron Demetz',
+            style: 'sculpture, dark, character'
+          },
+          {
+            artist: 'Posuka Demizu',
+            style: 'anime, manga, fantasy'
+          },
+          {
+            artist: 'Guy Denning',
+            style: 'portrait, messy, dark'
+          },
+          {
+            artist: 'Mike Deodato',
+            style: 'comics, high contrast'
+          },
+          {
+            artist: 'Andre Derain',
+            style: 'fauvism, impressionism, expressionism'
+          },
+          {
+            artist: 'Martin Deschambault',
+            style: 'digital, landscape, sci-fi'
+          },
+          {
+            artist: 'Vincent Desiderio',
+            style: 'realism'
+          },
+          {
+            artist: 'Brian Despain',
+            style: 'surrealism'
+          },
+          {
+            artist: 'Charles Maurice Detmold',
+            style: 'fantasy, watercolor, art nouveau'
+          },
+          {
+            artist: 'Edward Julius Detmold',
+            style: 'fantasy, watercolor, art nouveau'
+          },
+          {
+            artist: 'Anne Dewailly',
+            style: 'figurativism, portrait, character'
+          },
+          {
+            artist: 'Vincent Di Fate',
+            style: 'sci-fi, fantasy, space'
+          },
+          {
+            artist: 'Richard Diebenkorn',
+            style: 'abstract, expressionism'
+          },
+          {
+            artist: 'Steve Dillon',
+            style: 'comics, scene, character'
+          },
+          {
+            artist: 'Mandy Disher',
+            style: 'photography, flowers'
+          },
+          {
+            artist: 'Walt Disney',
+            style: 'cartoon, whimsical, storybook realism'
+          },
+          {
+            artist: 'Tony DiTerlizzi',
+            style: 'fantasy, whimsical'
+          },
+          {
+            artist: 'Steve Ditko',
+            style: 'comics, character'
+          },
+          {
+            artist: 'Anna Dittmann',
+            style: 'portrait, fantasy, digital'
+          },
+          {
+            artist: 'Otto Dix',
+            style: 'expressionism'
+          },
+          {
+            artist: 'Dima Dmitriev',
+            style: 'impressionism, landscape, vibrant'
+          },
+          {
+            artist: 'Tarsila do Amaral',
+            style: 'surrealism, vibrant, cubism'
+          },
+          {
+            artist: 'Thomas Dodd',
+            style: 'dark, magic realism, portrait'
+          },
+          {
+            artist: 'Peter Doig',
+            style: 'figurativism, landscape, abstract'
+          },
+          {
+            artist: 'Ray Donley',
+            style: 'baroque, portrait, dark'
+          },
+          {
+            artist: 'Adrian Donoghue',
+            style: 'cityscape, streetscape, architecture'
+          },
+          {
+            artist: 'Stanley Donwood',
+            style: 'high contrast, monochromatic, dark'
+          },
+          {
+            artist: 'Gustave Dore',
+            style: 'dark, detailed, romanticism'
+          },
+          {
+            artist: 'Dave Dorman',
+            style: 'sci-fi, horror, fantasy'
+          },
+          {
+            artist: 'Patrick Dougherty',
+            style: 'sculpture, nature, installation'
+          },
+          {
+            artist: 'Aaron Douglas',
+            style: 'melanin, cubism, graphic design'
+          },
+          {
+            artist: 'Arthur Dove',
+            style: 'abstract, high contrast, fauvism'
+          },
+          {
+            artist: 'David Downton',
+            style: 'expressionism portrait, high contrast'
+          },
+          {
+            artist: 'Richard Doyle',
+            style: 'detailed, scene'
+          },
+          {
+            artist: 'Tim Doyle',
+            style: 'comics, detailed'
+          },
+          {
+            artist: 'Natalia Drepina',
+            style: 'photography, portrait, dark'
+          },
+          {
+            artist: 'David Driskell',
+            style: 'melanin, abstract, colorful'
+          },
+          {
+            artist: 'Philippe Druillet',
+            style: 'comics, detailed, dark'
+          },
+          {
+            artist: 'TJ Drysdale',
+            style: 'photography, fantasy, landscape'
+          },
+          {
+            artist: 'Albert Dubois-Pillet',
+            style: 'impressionism, pointillism'
+          },
+          {
+            artist: 'Jean Dubuffet',
+            style: 'high contrast, abstract, expressionism'
+          },
+          {
+            artist: 'Duccio',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Marcel Duchamp',
+            style: 'surrealism, cubism, fauvism'
+          },
+          {
+            artist: 'Raymond Duchamp-Villon',
+            style: 'sculpture, cubism'
+          },
+          {
+            artist: 'Joseph Ducreux',
+            style: 'character, portrait'
+          },
+          {
+            artist: 'Raoul Dufy',
+            style: 'fauvism'
+          },
+          {
+            artist: 'Edmund Dulac',
+            style: 'whimsical, art nouveau'
+          },
+          {
+            artist: 'Marlene Dumas',
+            style: 'watercolor, portrait'
+          },
+          {
+            artist: 'Evelyn Dunbar',
+            style: 'scene, landscape'
+          },
+          {
+            artist: 'John Duncan',
+            style: 'symbolism, romanticism'
+          },
+          {
+            artist: 'Robert S. Duncanson',
+            style: 'landscape, romanticism, realism'
+          },
+          {
+            artist: 'Max Dupain',
+            style: 'photography, high contrast'
+          },
+          {
+            artist: 'Asher Brown Durand',
+            style: 'landscape, luminism, romanticism'
+          },
+          {
+            artist: 'Albrecht Durer',
+            style: 'renaissance, detailed, scene'
+          },
+          {
+            artist: 'Bill Durgin',
+            style: 'sculpture, nudity'
+          },
+          {
+            artist: 'Charles Dwyer',
+            style: 'watercolor, messy, portrait'
+          },
+          {
+            artist: 'William Dyce',
+            style: 'portrait, romanticism, scene'
+          },
+          {
+            artist: 'Chris Dyer',
+            style: 'psychedelic, vibrant, colorful'
+          },
+          {
+            artist: 'Thomas Eakins',
+            style: 'realism, impressionism, scene'
+          },
+          {
+            artist: 'Ray Eames',
+            style: 'bauhaus, graphic design, architecture'
+          },
+          {
+            artist: 'Joan Eardley',
+            style: 'realism, scene, landscape'
+          },
+          {
+            artist: 'Louis Comfort Tiffany',
+            style: 'art nouveau, stained glass'
+          },
+          {
+            artist: 'Stéphane Erouane Dumas',
+            style: 'fantasy, surrealism, vibrant'
+          },
+          {
+            artist: 'Stelios Faitakis',
+            style: 'street art, graffiti, political'
+          },
+          {
+            artist: 'Claude Falk',
+            style: 'comics, detailed, dark'
+          },
+          {
+            artist: 'Emilie Mae Feige',
+            style: 'photography, portrait, dark'
+          },
+          {
+            artist: 'Lyonel Feininger',
+            style: 'cubism, expressionism, abstract'
+          },
+          {
+            artist: 'Franz von Felbinger',
+            style: 'renaissance, detailed'
+          },
+          {
+            artist: 'Luis Feito',
+            style: 'abstract, expressionism, colorful'
+          },
+          {
+            artist: 'Hugo Feliciano',
+            style: 'sci-fi, fantasy, landscape'
+          },
+          {
+            artist: 'Rafael Ferrer',
+            style: 'abstract, minimalist, colorful'
+          },
+          {
+            artist: 'Charles de La Fosse',
+            style: 'baroque, rococo, scene'
+          },
+          {
+            artist: 'Mary Beth Edelson',
+            style: 'feminist art, collage, political'
+          },
+          {
+            artist: 'Gerhard von Amyntor',
+            style: 'renaissance, detailed'
+          },
+          {
+            artist: 'Mary Fairchild MacMonnies',
+            style: 'impressionism, portrait, scene'
+          },
+          {
+            artist: 'Riccardo Falcinelli',
+            style: 'sculpture, abstract, vibrant'
+          },
+          {
+            artist: 'Jean Fautrier',
+            style: 'abstract, tachisme, surrealism'
+          },
+          {
+            artist: 'Emilio Fedele',
+            style: 'sculpture, abstract, vibrant'
+          },
+          {
+            artist: 'Alessandro Fergnani',
+            style: 'realism, portrait, character'
+          },
+          {
+            artist: 'Alessandro Ferro',
+            style: 'realism, portrait, character'
+          },
+          {
+            artist: 'Ernst Feyerabend',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Roger Fiammetti',
+            style: 'realism, portrait, character'
+          },
+          {
+            artist: 'Cuno Amiet',
+            style: 'expressionism, fauvism, vibrant'
+          },
+          {
+            artist: 'Ilse Fehling',
+            style: 'expressionism, portrait, scene'
+          },
+          {
+            artist: 'Antoni Ferran',
+            style: 'abstract, vibrant'
+          },
+          {
+            artist: 'Constance Marie Charpentier',
+            style: 'rococo, portrait'
+          },
+          {
+            artist: 'Tom Ferson',
+            style: 'comics, detailed, dark'
+          },
+          {
+            artist: 'Luis Ferreira',
+            style: 'sci-fi, fantasy, landscape'
+          },
+          {
+            artist: 'Harold Fisk',
+            style: 'mapmaking, geography'
+          },
+          {
+            artist: 'Donald Fisher',
+            style: 'photography, black and white'
+          },
+          {
+            artist: 'Jon Foster',
+            style: 'fantasy, sci-fi, detailed'
+          },
+          {
+            artist: 'Eric Fortune',
+            style: 'surrealism, fantasy, character'
+          },
+          {
+            artist: 'Malcolm Foss',
+            style: 'sculpture, abstract'
+          },
+          {
+            artist: 'Mihály von Fuchs',
+            style: 'renaissance, detailed'
+          },
+          {
+            artist: 'Geraldine Fuchs',
+            style: 'abstract, vibrant, surrealism'
+          },
+          {
+            artist: 'Charles M. Fulda',
+            style: 'sculpture, abstract'
+          },
+          {
+            artist: 'Frédéric Bazille',
+            style: 'impressionism, scene'
+          },
+          {
+            artist: 'Eduard von Gebhardt',
+            style: 'realism, scene, portrait'
+          },
+          {
+            artist: 'Anne Geddes',
+            style: 'photography, whimsical, portrait'
+          },
+          {
+            artist: 'Lionel Percy Smythe',
+            style: 'impressionism, landscape'
+          },
+          {
+            artist: 'Frederick Goodall',
+            style: 'orientalism, scene, landscape'
+          },
+          {
+            artist: 'Charles Green',
+            style: 'pre-raphaelite, detailed, scene'
+          },
+          {
+            artist: 'Charles Gleyre',
+            style: 'academic art, neoclassicism'
+          },
+          {
+            artist: 'Artemisia Gentileschi',
+            style: 'baroque, portrait, character'
+          },
+          {
+            artist: 'Elisabetta Sirani',
+            style: 'baroque, portrait, character'
+          },
+          {
+            artist: 'Gentile da Fabriano',
+            style: 'gothic, detailed, religious'
+          },
+          {
+            artist: 'Antonio Gattorno',
+            style: 'surrealism, scene'
+          },
+          {
+            artist: 'Francesco di Giorgio Martini',
+            style: 'renaissance, detailed'
+          },
+          {
+            artist: 'Nunzio Gulino',
+            style: 'surrealism, fantasy'
+          },
+          {
+            artist: 'Gustave Guillaumet',
+            style: 'orientalism, scene'
+          },
+          {
+            artist: 'Adolphe Gérome',
+            style: 'academic art, orientalism'
+          },
+          {
+            artist: 'Antoine Gerbault',
+            style: 'realism, portrait, scene'
+          },
+          {
+            artist: 'Karl von Gebhardt',
+            style: 'realism, scene, portrait'
+          },
+          {
+            artist: 'Jean-Léon Gérôme',
+            style: 'academic art, orientalism, neoclassicism'
+          },
+          {
+            artist: 'Konrad Gesner',
+            style: 'detailed, botanical'
+          },
+          {
+            artist: 'Francisco Goya',
+            style: 'romanticism, scene, portrait'
+          },
+          {
+            artist: 'Gotthardt Kuehl',
+            style: 'realism, portrait, scene'
+          },
+          {
+            artist: 'Gottlieb von Koch',
+            style: 'realism, landscape, scene'
+          },
+          {
+            artist: 'Albrecht Goes',
+            style: 'realism, landscape, scene'
+          },
+          {
+            artist: 'Georges Rouget',
+            style: 'academic art, romanticism'
+          },
+          {
+            artist: 'Giovanni Battista Ruoppolo',
+            style: 'baroque, detailed, still life'
+          },
+          {
+            artist: 'George Romney',
+            style: 'rococo, portrait, character'
+          },
+          {
+            artist: 'Guido Reni',
+            style: 'baroque, detailed, religious'
+          },
+          {
+            artist: 'George Harvey',
+            style: 'impressionism, landscape'
+          },
+          {
+            artist: 'Hans von Hayek',
+            style: 'realism, portrait, character'
+          },
+          {
+            artist: 'Hugo von Habermann',
+            style: 'realism, portrait, scene'
+          },
+          {
+            artist: 'Harriet Backer',
+            style: 'impressionism, scene, portrait'
+          },
+          {
+            artist: 'Hugo Anton Fisher',
+            style: 'realism, landscape, scene'
+          },
+          {
+            artist: 'Harriet Powers',
+            style: 'folk art, quilt making'
+          },
+          {
+            artist: 'Henry F. Farny',
+            style: 'realism, scene, landscape'
+          },
+          {
+            artist: 'Walker Evans',
+            style: 'photography, monochromatic, realism'
+          },
+          {
+            artist: 'Adrianus Eversen',
+            style: 'cityscape, romanticism'
+          },
+          {
+            artist: 'Glenn Fabry',
+            style: 'fantasy, sci-fi, comics'
+          },
+          {
+            artist: 'Anton Fadeev',
+            style: 'landscape, digital'
+          },
+          {
+            artist: 'Shepard Fairey',
+            style: 'high contrast, graphic design'
+          },
+          {
+            artist: 'Andy Fairhurst',
+            style: 'sci-fi, fantasy, horror'
+          },
+          {
+            artist: 'Luis Ricardo Falero',
+            style: 'figurativism, fantasy, nudity'
+          },
+          {
+            artist: 'John Philip Falter',
+            style: 'clean, scene, realism'
+          },
+          {
+            artist: 'Henri Fantin-Latour',
+            style: 'flowers, realism, symbolism'
+          },
+          {
+            artist: 'Joseph Farquharson',
+            style: 'landscape'
+          },
+          {
+            artist: 'Iain Faulkner',
+            style: 'monochromatic, scene, figurativism'
+          },
+          {
+            artist: 'Louis Faurer',
+            style: 'photography, moonochromatic'
+          },
+          {
+            artist: 'Lauren Faust',
+            style: 'cartoon, anime, character'
+          },
+          {
+            artist: 'Mary Fedden',
+            style: 'still life, flowers, primitivism'
+          },
+          {
+            artist: 'Sverre Fehn',
+            style: 'architecture'
+          },
+          {
+            artist: 'Lyonel Feininger',
+            style: 'expressionism, angular, cubism'
+          },
+          {
+            artist: 'Lorser Feitelson',
+            style: 'surrealism, abstract, angular'
+          },
+          {
+            artist: 'Al Feldstein',
+            style: 'comics, detailed, scene'
+          },
+          {
+            artist: 'Joe Fenton',
+            style: 'dark, whimsical, surrealism'
+          },
+          {
+            artist: 'Andrew Ferez',
+            style: 'surrealism, fantasy, detailed'
+          },
+          {
+            artist: 'Roberto Ferri',
+            style: 'baroque, romanticism, nudity'
+          },
+          {
+            artist: 'Emil Ferris',
+            style: 'cartoon, horror'
+          },
+          {
+            artist: 'Hugh Ferriss',
+            style: 'cityscape, architecture, art deco'
+          },
+          {
+            artist: 'Luke Fildes',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'David Finch',
+            style: 'detailed, comics, fantasy'
+          },
+          {
+            artist: 'Leonor Fini',
+            style: 'surrealism'
+          },
+          {
+            artist: 'Callie Fink',
+            style: 'psychedelic, vibrant, colorful'
+          },
+          {
+            artist: 'Larry Fink',
+            style: 'photography, monochromatic'
+          },
+          {
+            artist: 'Virgil Finlay',
+            style: 'comics, sci-fi, fantasy'
+          },
+          {
+            artist: 'Anato Finnstark',
+            style: 'digital, fantasy, scene'
+          },
+          {
+            artist: 'Howard Finster',
+            style: 'primitivism, portrait'
+          },
+          {
+            artist: 'Anton Otto Fischer',
+            style: 'character, scene'
+          },
+          {
+            artist: 'Paul Gustav Fischer',
+            style: 'character, landscape, scene'
+          },
+          {
+            artist: 'Oskar Fischinger',
+            style: 'abstract, vibrant, colorful'
+          },
+          {
+            artist: 'Eric Fischl',
+            style: 'realism, expressionism, scene'
+          },
+          {
+            artist: 'Samuel Melton Fisher',
+            style: 'impressionism, portrait, flowers'
+          },
+          {
+            artist: 'John Anster Fitzgerald',
+            style: 'detailed, fantasy, whimsical'
+          },
+          {
+            artist: 'Tony Fitzpatrick',
+            style: 'collage, vibrant, detailed'
+          },
+          {
+            artist: 'Hippolyte Flandrin',
+            style: 'renaissance, romanticism, baroque'
+          },
+          {
+            artist: 'Dan Flavin',
+            style: 'installation, light'
+          },
+          {
+            artist: 'Max Fleischer',
+            style: 'cartoon'
+          },
+          {
+            artist: 'Govaert Flinck',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Alex Russell Flint',
+            style: 'portrait, scene, realism'
+          },
+          {
+            artist: 'William Russell Flint',
+            style: 'watercolor, scene, nudity'
+          },
+          {
+            artist: 'Maia Flore',
+            style: 'photography, whimsical, scene'
+          },
+          {
+            artist: 'Frans Floris',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Kaja Foglio',
+            style: 'whimsical, cartoon'
+          },
+          {
+            artist: 'Phil Foglio',
+            style: 'whimsical, cartoon'
+          },
+          {
+            artist: 'Fernand Fonssagrives',
+            style: 'photography, monochromatic, high contrast'
+          },
+          {
+            artist: 'Franco Fontana',
+            style: 'abstract, landscape, vibrant'
+          },
+          {
+            artist: 'Lavinia Fontana',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Lucio Fontana',
+            style: 'abstract, sculpture, vibrant'
+          },
+          {
+            artist: 'Jean-Louis Forain',
+            style: 'impressionism, expressionism, scene'
+          },
+          {
+            artist: 'Stanhope Forbes',
+            style: 'landscape, scene, impressionism'
+          },
+          {
+            artist: 'Henry Justice Ford',
+            style: 'art nouveau, romanticism, detailed'
+          },
+          {
+            artist: 'Eleanor Fortescue-Brickdale',
+            style: 'romanticism, scene, character'
+          },
+          {
+            artist: 'Chris Foss',
+            style: 'vibrant, sci-fi, space'
+          },
+          {
+            artist: 'Hal Foster',
+            style: 'comics, clean, detailed'
+          },
+          {
+            artist: 'Jon Foster',
+            style: 'digital, portrait, scene'
+          },
+          {
+            artist: 'Myles Birket Foster',
+            style: 'watercolor, landscape, scene'
+          },
+          {
+            artist: 'Norman Foster',
+            style: 'architecture'
+          },
+          {
+            artist: 'Jean Fouquet',
+            style: 'renaissance, scene'
+          },
+          {
+            artist: 'Toby Fox',
+            style: 'digital, cartoon'
+          },
+          {
+            artist: 'Matt Fraction',
+            style: 'comics, character, scene'
+          },
+          {
+            artist: 'Alexandre-Evariste Fragonard',
+            style: 'baroque, romanticism, scene'
+          },
+          {
+            artist: 'Jean-Honore Fragonard',
+            style: 'baroque, impressionism, scene'
+          },
+          {
+            artist: 'Art Frahm',
+            style: 'portrait, character'
+          },
+          {
+            artist: 'Sam Francis',
+            style: 'abstract, expressionism'
+          },
+          {
+            artist: 'Frans Francken the Younger',
+            style: 'baroque, scene'
+          },
+          {
+            artist: 'Lisa Frank',
+            style: 'whimsical, vibrant, colorful'
+          },
+          {
+            artist: 'Andreas Franke',
+            style: 'photography, scene, surrealism'
+          },
+          {
+            artist: 'Helen Frankenthaler',
+            style: 'abstract, expressionism, watercolor'
+          },
+          {
+            artist: 'Frank Frazetta',
+            style: 'fantasy, dark, scene'
+          },
+          {
+            artist: 'Hans Fredrik Gude',
+            style: 'landscape, scene, romanticism'
+          },
+          {
+            artist: 'Giovanni Benedetto Castiglione',
+            style: 'baroque, detailed, scene'
+          },
+          {
+            artist: 'Karl Gerhard',
+            style: 'landscape, scene'
+          },
+          {
+            artist: 'Emma Gaggiotti Richards',
+            style: 'impressionism, flowers'
+          },
+          {
+            artist: 'Domenico Gagini',
+            style: 'renaissance, sculpture'
+          },
+          {
+            artist: 'Anthony Gaggiotti Richards',
+            style: 'impressionism, flowers'
+          },
+          {
+            artist: 'Edgar Gage',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Kenny Gage',
+            style: 'comics, character'
+          },
+          {
+            artist: 'Dario Gaggio',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Johann Gagarin',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Vladimir Gaidarov',
+            style: 'digital, scene'
+          },
+          {
+            artist: 'Antonio Galeazzo Bentivoglio',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Paul Galdone',
+            style: 'children’s book, character'
+          },
+          {
+            artist: 'Jacopo Galli',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Richard Gallo',
+            style: 'photography, monochromatic, scene'
+          },
+          {
+            artist: 'Thomas Gambino',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Francesco Gambarini',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Clemente Galvanoni',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Domenico Gambera',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Daniele Gamberini',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Carlo Gametti',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Alessandro Gamurini',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Ivan Aivazovsky',
+            style: 'romanticism, seascape, scene'
+          },
+          {
+            artist: 'Igino Andreasi',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Vladimir Ignatievich Gorikker',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Vasiliy Andreevich Golike',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Luca di Tomme',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Ivan Petrovich Golikov',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Andrey Golubev',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Ciro Giuseppe Longo',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Silvio Giulio Longhi',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Davide Domenico Ghirlandaio',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Kathleen Ghetian',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Francesco Ghetti',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Jacques Le Moyne',
+            style: 'renaissance, scene'
+          },
+          {
+            artist: 'Edouard Vuillard',
+            style: 'post-impressionism, scene'
+          },
+          {
+            artist: 'Achille Peretti',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Claude Raguet Hirst',
+            style: 'impressionism, scene, landscape'
+          },
+          {
+            artist: 'Nicolaes Maes',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Hans Makart',
+            style: 'historical, scene, academic'
+          },
+          {
+            artist: 'Alphonse Maria Mucha',
+            style: 'art nouveau, decorative, scene'
+          },
+          {
+            artist: 'Ippolito Scarsella',
+            style: 'mannerism, portrait'
+          },
+          {
+            artist: 'Vasily Polenov',
+            style: 'realism, landscape'
+          },
+          {
+            artist: 'Konstantin Somov',
+            style: 'symbolism, portrait'
+          },
+          {
+            artist: 'Philippe Jacques de Loutherbourg',
+            style: 'romanticism, landscape, scene'
+          },
+          {
+            artist: 'William Nicholson',
+            style: 'portrait, landscape, scene'
+          },
+          {
+            artist: 'Cornelis de Wael',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Daniel Huntington',
+            style: 'portrait, scene, historical'
+          },
+          {
+            artist: 'Isidor Kaufmann',
+            style: 'realism, portrait'
+          },
+          {
+            artist: 'Ernst Ludwig Kirchner',
+            style: 'expressionism, scene'
+          },
+          {
+            artist: 'Szymon Czechowicz',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Raffaello Vanni',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Anton Giulio Brignole',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Francesco Guardi',
+            style: 'rococo, scene, landscape'
+          },
+          {
+            artist: 'Karel Dujardin',
+            style: 'baroque, landscape, scene'
+          },
+          {
+            artist: 'Jan Brueghel the Younger',
+            style: 'baroque, scene'
+          },
+          {
+            artist: 'Giovanni Antonio Canal',
+            style: 'rococo, landscape, scene'
+          },
+          {
+            artist: 'Martin Drolling',
+            style: 'neoclassicism, still life'
+          },
+          {
+            artist: 'Tiziano Vecelli',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Cornelis de Heem',
+            style: 'baroque, still life'
+          },
+          {
+            artist: 'Juan de Flandes',
+            style: 'renaissance, portrait'
+          },
+          {
+            artist: 'Girolamo Muziano',
+            style: 'mannerism, scene'
+          },
+          {
+            artist: 'Matthias Stom',
+            style: 'baroque, scene'
+          },
+          {
+            artist: 'Fede Galizia',
+            style: 'baroque, still life'
+          },
+          {
+            artist: 'Hans von Aachen',
+            style: 'mannerism, portrait'
+          },
+          {
+            artist: 'Claude Joseph Vernet',
+            style: 'rococo, landscape, scene'
+          },
+          {
+            artist: 'Gerrit Adriaensz Berckheyde',
+            style: 'baroque, cityscape'
+          },
+          {
+            artist: 'Hendrick Cornelisz van Vliet',
+            style: 'baroque, cityscape'
+          },
+          {
+            artist: 'Juan de Valdes Leal',
+            style: 'baroque, scene'
+          },
+          {
+            artist: 'Matthias Withoos',
+            style: 'baroque, landscape, scene'
+          },
+          {
+            artist: 'Cristofano Allori',
+            style: 'mannerism, portrait'
+          },
+          {
+            artist: 'Hendrick van Vliet',
+            style: 'baroque, cityscape'
+          },
+          {
+            artist: 'Adrian Ghenie',
+            style: 'messy, abstract, expressionism'
+          },
+          {
+            artist: 'Alberto Giacometti',
+            style: 'sculpture, expressionism'
+          },
+          {
+            artist: 'Donato Giancola',
+            style: 'fantasy, sci-fi, detailed'
+          },
+          {
+            artist: 'Dave Gibbons',
+            style: 'comics'
+          },
+          {
+            artist: 'Sanford Robinson Gifford',
+            style: 'landscape, luminism'
+          },
+          {
+            artist: 'H. R. (Hans Ruedi) Giger',
+            style: 'sci-fi, dark, monochromatic'
+          },
+          {
+            artist: 'James Gilleard',
+            style: 'digital, architecture, vibrant'
+          },
+          {
+            artist: 'Kieron Gillen',
+            style: 'comics'
+          },
+          {
+            artist: 'Leticia Gillett',
+            style: 'digital, character, 3D'
+          },
+          {
+            artist: 'Sam Gilliam',
+            style: 'abstract, installation, textile'
+          },
+          {
+            artist: 'Liam Gillick',
+            style: 'abstract, installation'
+          },
+          {
+            artist: 'Robert Gillmor',
+            style: 'animals'
+          },
+          {
+            artist: 'James Gillray',
+            style: 'cartoon, scene'
+          },
+          {
+            artist: 'Harold Gilman',
+            style: 'portrait, landscape, impressionism'
+          },
+          {
+            artist: 'Charles Ginner',
+            style: 'vibrant, landscape, cityscape'
+          },
+          {
+            artist: 'Luca Giordano',
+            style: 'baroque'
+          },
+          {
+            artist: 'Giorgione',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Giotto',
+            style: 'renaissance'
+          },
+          {
+            artist: 'Greg Girard',
+            style: 'photography, streetscape, high contrast'
+          },
+          {
+            artist: 'Eugene Girardet',
+            style: 'romanticism'
+          },
+          {
+            artist: 'Eugene Giraud',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Jean Giraud',
+            style: 'comics, psychedelic, surrealism'
+          },
+          {
+            artist: 'Anne-Louis Girodet',
+            style: 'romanticism, portrait'
+          },
+          {
+            artist: 'William James Glackens',
+            style: 'impressionism, scene'
+          },
+          {
+            artist: 'Milton Glaser',
+            style: 'graphic design, vibrant, colorful'
+          },
+          {
+            artist: 'Albert Gleizes',
+            style: 'cubism, angular'
+          },
+          {
+            artist: 'Alfred Augustus Glendening',
+            style: 'landscape, scene'
+          },
+          {
+            artist: 'Lucy Glendinning',
+            style: 'sculpture'
+          },
+          {
+            artist: 'Burt Glinn',
+            style: 'photography, scene, monochromatic'
+          },
+          {
+            artist: 'Seth Globepainter',
+            style: 'street art, cartoon'
+          },
+          {
+            artist: 'Gerhard Gluck',
+            style: 'scene'
+          },
+          {
+            artist: 'Grigory Gluckmann',
+            style: 'impressionism, figurativism'
+          },
+          {
+            artist: 'Warwick Goble',
+            style: 'whimsical, art nouveau, children\'s illustration'
+          },
+          {
+            artist: 'John Harris',
+            style: 'dark, sci-fi, space'
+          },
+          {
+            artist: 'Lawren Harris',
+            style: 'landscape, clean'
+          },
+          {
+            artist: 'Florence Harrison',
+            style: 'art nouveau, children\'s illustration, romanticism'
+          },
+          {
+            artist: 'L. Birge Harrison',
+            style: 'landspape, low contrast, impressionism'
+          },
+          {
+            artist: 'Marsden Hartley',
+            style: 'landscape, portrait, primitivism'
+          },
+          {
+            artist: 'Hans Hartung',
+            style: 'abstract, dark'
+          },
+          {
+            artist: 'Harold Harvey',
+            style: 'watercolor, landscape, impressionism'
+          },
+          {
+            artist: 'Ryohei Hase',
+            style: 'magic realism, surrealism, fantasy'
+          },
+          {
+            artist: 'William Stanley Haseltine',
+            style: 'luminism, landscape'
+          },
+          {
+            artist: 'Jacob Hashimoto',
+            style: 'angular, abstract, installation'
+          },
+          {
+            artist: 'Childe Hassam',
+            style: 'impressionism'
+          },
+          {
+            artist: 'Ben Hatke',
+            style: 'cartoon, children\'s illustration, character'
+          },
+          {
+            artist: 'Mona Hatoum',
+            style: 'installation, sculpture, photography'
+          },
+          {
+            artist: 'Naoto Hattori',
+            style: 'surrealism, detailed'
+          },
+          {
+            artist: 'Zhang Jingna',
+            style: 'fashion, photography'
+          },
+          {
+            artist: 'Chantal Joffe',
+            style: 'portrait, high contrast, figurativism'
+          },
+          {
+            artist: 'Constantin Joffe',
+            style: 'fashion, photography'
+          },
+          {
+            artist: 'Martine Johanna',
+            style: 'portrait, figurativism'
+          },
+          {
+            artist: 'Erik Johansson',
+            style: 'photography, landscape, surrealism'
+          },
+          {
+            artist: 'Augustus John',
+            style: 'impressionism, portrait'
+          },
+          {
+            artist: 'Gwen John',
+            style: 'portrait, watercolor'
+          },
+          {
+            artist: 'Geoff Johns',
+            style: 'comics, detailed'
+          },
+          {
+            artist: 'Jasper Johns',
+            style: 'abstract, expressionism, pop art'
+          },
+          {
+            artist: 'Eastman Johnson',
+            style: 'realism, portrait, landscape'
+          },
+          {
+            artist: 'Richard S. Johnson',
+            style: 'impressionism, portrait, scene'
+          },
+          {
+            artist: 'Alfred Cheney Johnston',
+            style: 'photography, monochromatic, portrait'
+          },
+          {
+            artist: 'Dorothy Johnstone',
+            style: 'landscape, portrait, figurativism'
+          },
+          {
+            artist: 'Jimmy Lawlor',
+            style: 'surrealism, magic realism'
+          },
+          {
+            artist: 'Thomas Lawrence',
+            style: 'romanticism, portrait, character'
+          },
+          {
+            artist: 'Ernest Lawson',
+            style: 'impressionism, realism, landscape'
+          },
+          {
+            artist: 'Henri Le Fauconnier',
+            style: 'cubism, impressionism, expressionism'
+          },
+          {
+            artist: 'Julio Le Parc',
+            style: 'vibrant, colorful, abstract'
+          },
+          {
+            artist: 'Bastien Lecouffe-Deharme',
+            style: 'digital, dark, fantasy'
+          },
+          {
+            artist: 'Minjae Lee',
+            style: 'portrait, surrealism'
+          },
+          {
+            artist: 'Harriet Lee-Merrion',
+            style: 'surrealism, ukiyo-e, watercolor'
+          },
+          {
+            artist: 'Nina Leen',
+            style: 'photography, monochromatic, portait'
+          },
+          {
+            artist: 'Fernand Leger',
+            style: 'abstract, cubism, vibrant'
+          },
+          {
+            artist: 'Paul Lehr',
+            style: 'sci-fi, fantasy, vibrant'
+          },
+          {
+            artist: 'Chris Leib',
+            style: 'surrealism, realism'
+          },
+          {
+            artist: 'Annie Leibovitz',
+            style: 'portrait, scene, photography'
+          },
+          {
+            artist: 'Edmund Leighton',
+            style: 'romanticism, scene, character'
+          },
+          {
+            artist: 'Frederick Lord Leighton',
+            style: 'portrait, romanticism, scene'
+          },
+          {
+            artist: 'Jeff Lemire',
+            style: 'comics, messy'
+          },
+          {
+            artist: 'Isaac Levitan',
+            style: 'landscape, realism, impressionism'
+          },
+          {
+            artist: 'J.C. Leyendecker',
+            style: 'art nouveau, portrait, scene'
+          },
+          {
+            artist: 'Andre Lhote',
+            style: 'cubism, fauvism'
+          },
+          {
+            artist: 'Roy Lichtenstein',
+            style: 'comics, portrait, abstract'
+          },
+          {
+            artist: 'Steve Lieber',
+            style: 'comics, character'
+          },
+          {
+            artist: 'Rob Liefeld',
+            style: 'comics, sci-fi, fantasy'
+          },
+          {
+            artist: 'Malcolm Liepke',
+            style: 'high contrast, character'
+          },
+          {
+            artist: 'David Ligare',
+            style: 'realism, scene, still life'
+          },
+          {
+            artist: 'Fang Lijun',
+            style: 'figurativism, detailed, vibrant'
+          },
+          {
+            artist: 'Ephraim Moses Lilien',
+            style: 'art nouveau'
+          },
+          {
+            artist: 'Richard Lindner',
+            style: 'pop art, figurativism'
+          },
+          {
+            artist: 'Norman Lindsay',
+            style: 'watercolor, nudity'
+          },
+          {
+            artist: 'Jeremy Lipking',
+            style: 'realism, portrait, scene'
+          },
+          {
+            artist: 'Filippino Lippi',
+            style: 'renaissance, scene, portrait'
+          },
+          {
+            artist: 'Laurie Lipton',
+            style: 'monochromatic, detailed, surrrealism'
+          },
+          {
+            artist: 'Michal Lisowski',
+            style: 'digital, scene, dark'
+          },
+          {
+            artist: 'Herbert List',
+            style: 'photography, monochromatic, high contrast'
+          },
+          {
+            artist: 'Scott Listfield',
+            style: 'realism, surrealism, scene'
+          },
+          {
+            artist: 'Cory Loftis',
+            style: 'digital, cartoon, whimsical'
+          },
+          {
+            artist: 'Maximilien Luce',
+            style: 'landscape, impressionism, vibrant'
+          },
+          {
+            artist: 'George Luks',
+            style: 'scene, realism, streetscape'
+          },
+          {
+            artist: 'Loretta Lux',
+            style: 'photography, portrait, surrealism'
+          },
+          {
+            artist: 'William Nicholson',
+            style: 'still life, portrait, landscape'
+          },
+          {
+            artist: 'Dee Nickerson',
+            style: 'primitivism, whimsical, landscape'
+          },
+          {
+            artist: 'Florian Nicolle',
+            style: 'watercolor, portrait, messy'
+          },
+          {
+            artist: 'Victor Nizovtsev',
+            style: 'magic realism, vibrant, whimsical'
+          },
+          {
+            artist: 'Earl Norem',
+            style: 'detailed, fantasy, dark'
+          },
+          {
+            artist: 'Marianne North',
+            style: 'nature, detailed'
+          },
+          {
+            artist: 'Octavio Ocampo',
+            style: 'surrealism, realism, figurativism'
+          },
+          {
+            artist: 'Eiichiro Oda',
+            style: 'manga, anime'
+          },
+          {
+            artist: 'Koson Ohara',
+            style: 'ukiyo-e, nature, flowers'
+          },
+          {
+            artist: 'Noriyoshi Ohrai',
+            style: 'fantasy, sci-fi, detailed'
+          },
+          {
+            artist: 'Tim Okamura',
+            style: 'portrait, graffiti, melanin'
+          },
+          {
+            artist: 'Naomi Okubo',
+            style: 'vibrant, detailed, collage'
+          },
+          {
+            artist: 'Edward Okun',
+            style: 'symbolism, art nouveau, scene'
+          },
+          {
+            artist: 'Oleg Oprisco',
+            style: 'photography, portrait, surrealism'
+          },
+          {
+            artist: 'Alphonse Osbert',
+            style: 'low contrast, symbolism, impressionism'
+          },
+          {
+            artist: 'Katsuhiro Otomo',
+            style: 'manga, anime, detailed'
+          },
+          {
+            artist: 'Steven Outram',
+            style: 'landscape, dark, romanticism'
+          },
+          {
+            artist: 'David Palumbo',
+            style: 'dark, character, figurativism'
+          },
+          {
+            artist: 'Michael Parkes',
+            style: 'magic realism, fantasy, art nouveau'
+          },
+          {
+            artist: 'Maxfield Parrish',
+            style: 'cloudscape, vibrant, art nouveau'
+          },
+          {
+            artist: 'Pierre Pellegrini',
+            style: 'monochromatic, photography, landscape'
+          },
+          {
+            artist: 'Paul Pelletier',
+            style: 'comics'
+          },
+          {
+            artist: 'Agnes Lawrence Pelton',
+            style: 'abstract, vibrant'
+          },
+          {
+            artist: 'George Pemba',
+            style: 'realism, melanin, scene'
+          },
+          {
+            artist: 'Irving Penn',
+            style: 'photography, monochromatic, portrait'
+          },
+          {
+            artist: 'Bruce Pennington',
+            style: 'sci-fi, fantasy, vibrant'
+          },
+          {
+            artist: 'Fabian Perez',
+            style: 'dark, figurativism, realism'
+          },
+          {
+            artist: 'Cleon Peterson',
+            style: 'flat colors, clean, character'
+          },
+          {
+            artist: 'Coles Phillips',
+            style: 'art deco'
+          },
+          {
+            artist: 'Jackson Pollock',
+            style: 'abstract, messy, expressionism'
+          },
+          {
+            artist: 'Lyubov Popova',
+            style: 'cubism, abstract'
+          },
+          {
+            artist: 'Candido Portinari',
+            style: 'expressionism, scene'
+          },
+          {
+            artist: 'Beatrix Potter',
+            style: 'whimsical, watercolor, children\'s illustration'
+          },
+          {
+            artist: 'Paulus Potter',
+            style: 'landscape, baroque, scene'
+          },
+          {
+            artist: 'Gediminas Pranckevicius',
+            style: 'surrealism, whimsical, detailed'
+          },
+          {
+            artist: 'Dod Procter',
+            style: 'impressionism, portrait, scene'
+          },
+          {
+            artist: 'Pierre Puvis de Chavannes',
+            style: 'symbolism, low contrast'
+          },
+          {
+            artist: 'Martin Rak',
+            style: 'photography, landscape'
+          },
+          {
+            artist: 'Paul Ranson',
+            style: 'abstract, vibrant, art nouveau'
+          },
+          {
+            artist: 'Robert Rauschenberg',
+            style: 'collage, abstract'
+          },
+          {
+            artist: 'Aliza Razell',
+            style: 'photography, fantasy, surrealism'
+          },
+          {
+            artist: 'Joel Rea',
+            style: 'surrealism, landscape, scene'
+          },
+          {
+            artist: 'Terry Redlin',
+            style: 'landscape, luminism, nature'
+          },
+          {
+            artist: 'Granville Redmond',
+            style: 'landscape, impressionism'
+          },
+          {
+            artist: 'Odilon Redon',
+            style: 'impressionism, symbolist, low contrast'
+          },
+          {
+            artist: 'Vicente Romero Redondo',
+            style: 'figurativism, scene'
+          },
+          {
+            artist: 'Vittorio Reggianini',
+            style: 'scene, renaissance'
+          },
+          {
+            artist: 'Paula Rego',
+            style: 'scene, portrait'
+          },
+          {
+            artist: 'Valentin Rekunenko',
+            style: 'scene, detailed, fantasy'
+          },
+          {
+            artist: 'Andrey Remnev',
+            style: 'baroque, renaissance, portrait'
+          },
+          {
+            artist: 'Ilya Repin',
+            style: 'realism, scene, portrait'
+          },
+          {
+            artist: 'John Reuss',
+            style: 'surrealism, figurativism'
+          },
+          {
+            artist: 'Stephanie Rew',
+            style: 'portrait, figurativism, realism'
+          },
+          {
+            artist: 'Joshua Reynolds',
+            style: 'portrait, romanticism'
+          },
+          {
+            artist: 'RHADS',
+            style: 'digital, surrealism, landscape'
+          },
+          {
+            artist: 'Louis Rhead',
+            style: 'art nouveau, detailed'
+          },
+          {
+            artist: 'Chris Riddell',
+            style: 'cartoon, children\'s illustration, watercolor'
+          },
+          {
+            artist: 'Brad Rigney',
+            style: 'scene, fantasy, character'
+          },
+          {
+            artist: 'Bridget Riley',
+            style: 'abstract, monochromatic, colorful'
+          },
+          {
+            artist: 'Diego Rivera',
+            style: 'cubism, impressionism, primitivism'
+          },
+          {
+            artist: 'Hubert Robert',
+            style: 'romanticism, landscape, architecture'
+          },
+          {
+            artist: 'Andreas Rocha',
+            style: 'digital, landscape, fantasy'
+          },
+          {
+            artist: 'Norman Rockwell',
+            style: 'realism, scene'
+          },
+          {
+            artist: 'Henriette Ronner-Knip',
+            style: 'animals, romanticism, still life'
+          },
+          {
+            artist: 'Conrad Roset',
+            style: 'impressionism, watercolor, portrait'
+          },
+          {
+            artist: 'Bob Ross',
+            style: 'landscape, romanticism, impressionism'
+          },
+          {
+            artist: 'Jessica Rossier',
+            style: 'photography, portrait'
+          },
+          {
+            artist: 'Leonid Afremov',
+            style: 'impressionism, colorful, vibrant'
+          },
+          {
+            artist: 'Isabel Saavedra',
+            style: 'fantasy, vibrant, surrealism'
+          },
+          {
+            artist: 'Egon Schiele',
+            style: 'expressionism, portrait'
+          },
+          {
+            artist: 'Otto Schmidt',
+            style: 'comics, character, detailed'
+          },
+          {
+            artist: 'Georges Rouault',
+            style: 'expressionism, fauvism, religious'
+          },
+          {
+            artist: 'Isabel Seliger',
+            style: 'collage, editorial, vibrant'
+          },
+          {
+            artist: 'Seth',
+            style: 'cartoon, character, detailed'
+          },
+          {
+            artist: 'Gustave Dore',
+            style: 'etching, detailed, dark'
+          },
+          {
+            artist: 'Eugene Seguy',
+            style: 'scientific illustration, detailed, vibrant'
+          },
+          {
+            artist: 'Martina Secondo Russo',
+            style: 'photography, surrealism, portrait'
+          },
+          {
+            artist: 'Andrey Semyonov',
+            style: 'digital, landscape, fantasy'
+          },
+          {
+            artist: 'Roger Dean',
+            style: 'fantasy, landscape, detailed'
+          },
+          {
+            artist: 'Jakub Rozalski',
+            style: 'digital, landscape, character'
+          },
+          {
+            artist: 'George Seraline',
+            style: 'portrait, vibrant, surrealism'
+          },
+          {
+            artist: 'Brian Selznick',
+            style: 'children\'s illustration, detailed, scene'
+          },
+          {
+            artist: 'Zachari Sasson',
+            style: 'photography, portrait'
+          },
+          {
+            artist: 'Felix Vallotton',
+            style: 'intimism, nabis, scene'
+          },
+          {
+            artist: 'Johannes Vermeer',
+            style: 'baroque, scene, detailed'
+          },
+          {
+            artist: 'Paolo Veronese',
+            style: 'mannerism, renaissance, scene'
+          },
+          {
+            artist: 'Antoine Vestier',
+            style: 'rococo, portrait'
+          },
+          {
+            artist: 'Emile Vernon',
+            style: 'edwardian, portrait'
+          },
+          {
+            artist: 'Paolo Uccello',
+            style: 'renaissance, detailed, scene'
+          },
+          {
+            artist: 'Utagawa Toyokuni',
+            style: 'ukiyo-e, woodblock printing'
+          },
+          {
+            artist: 'Utagawa Kuniyoshi',
+            style: 'ukiyo-e, woodblock printing'
+          },
+          {
+            artist: 'Vladimir Kush',
+            style: 'surrealism, fantasy, vibrant'
+          },
+          {
+            artist: 'René Magritte',
+            style: 'surrealism, detailed, flat colors'
+          },
+          {
+            artist: 'Ilya Mashkov',
+            style: 'cubism, futurism'
+          },
+          {
+            artist: 'Károly Markó the Elder',
+            style: 'romanticism, landscape'
+          },
+          {
+            artist: 'Abelardo Morell',
+            style: 'photography, surrealism'
+          },
+          {
+            artist: 'Jean Metzinger',
+            style: 'cubism, fauvism, impressionism'
+          },
+          {
+            artist: 'Michelangelo Merisi da Caravaggio',
+            style: 'baroque, chiaroscuro, scene'
+          },
+          {
+            artist: 'Igor Morski',
+            style: 'surrealism, detailed, vibrant'
+          },
+          {
+            artist: 'Igor Mitoraj',
+            style: 'surrealism, classical, sculpture'
+          },
+          {
+            artist: 'Amedeo Modigliani',
+            style: 'portrait, figurativism'
+          },
+          {
+            artist: 'Moebius',
+            style: 'sci-fi, fantasy, detailed'
+          },
+          {
+            artist: 'Joan Miró',
+            style: 'surrealism, abstract, colorful'
+          },
+          {
+            artist: 'Frantisek Kupka',
+            style: 'abstract, symbolism'
+          },
+          {
+            artist: 'Gustav Klimt',
+            style: 'symbolism, art nouveau, detailed'
+          },
+          {
+            artist: 'Paul Klee',
+            style: 'expressionism, abstract, vibrant'
+          },
+          {
+            artist: 'Wassily Kandinsky',
+            style: 'abstract, expressionism'
+          },
+          {
+            artist: 'Giovanni Battista Tiepolo',
+            style: 'rococo, baroque, scene'
+          },
+          {
+            artist: 'Tiepolo',
+            style: 'rococo, baroque, scene'
+          },
+          {
+            artist: 'Titian',
+            style: 'renaissance, venetian school, scene'
+          },
+          {
+            artist: 'Amedeo Modigliani',
+            style: 'portrait, figurativism'
+          },
+          {
+            artist: 'Theophile Steinlen',
+            style: 'art nouveau, scene, detailed'
+          },
+          {
+            artist: 'Henriette Browne',
+            style: 'orientalism, scene, portrait'
+          },
+          {
+            artist: 'Kai Fine Art',
+            style: 'photography, landscape'
+          },
+          {
+            artist: 'Kevin Sloan',
+            style: 'surrealism, landscape, scene'
+          },
+          {
+            artist: 'Yusuke Shimakawa',
+            style: 'manga, anime'
+          },
+          {
+            artist: 'Hajime Sorayama',
+            style: 'sci-fi, robotics, detailed'
+          },
+          {
+            artist: 'Aurelino dos Santos',
+            style: 'fantasy, vibrant, surrealism'
+          },
+          {
+            artist: 'Howard Sherman',
+            style: 'dark, scene, fantasy'
+          },
+          {
+            artist: 'Frank Frazetta',
+            style: 'fantasy, detailed, vibrant'
+          },
+          {
+            artist: 'Kinuko Y. Craft',
+            style: 'fantasy, detailed, vibrant'
+          },
+          {
+            artist: 'Wangjie Li',
+            style: 'digital, fantasy, character'
+          },
+          {
+            artist: 'Greg Rutkowski',
+            style: 'fantasy, character, detailed'
+          },
+          {
+            artist: 'Yuko Shimizu',
+            style: 'illustration, vibrant, character'
+          },
+          {
+            artist: 'Ken Taylor',
+            style: 'illustration, character, detailed'
+          },
+          {
+            artist: 'Bob Eggleton',
+            style: 'sci-fi, fantasy, detailed'
+          },
+          {
+            artist: 'John Harris',
+            style: 'sci-fi, landscape, detailed'
+          },
+          {
+            artist: 'Justin Sweet',
+            style: 'fantasy, character, detailed'
+          },
+          {
+            artist: 'Daniel Dociu',
+            style: 'fantasy, landscape, character'
+          },
+          {
+            artist: 'Ruan Jia',
+            style: 'fantasy, landscape, character'
+          },
+          {
+            artist: 'Even Mehl Amundsen',
+            style: 'fantasy, character, detailed'
+          },
+          {
+            artist: 'Nicolas Bouvier (Sparth)',
+            style: 'sci-fi, fantasy, landscape'
+          },
+          {
+            artist: 'Marc Simonetti',
+            style: 'fantasy, landscape, character'
+          },
+          {
+            artist: 'Aleksi Briclot',
+            style: 'fantasy, sci-fi, character'
+          },
+          {
+            artist: 'Mike Mignola',
+            style: 'comics, dark, character'
+          },
+          {
+            artist: 'Gabriel Picolo',
+            style: 'illustration, character, vibrant'
+          },
+          {
+            artist: 'Moyoco Anno',
+            style: ''
+          },
+          {
+            artist: 'Tokio Aoyama',
+            style: ''
+          },
+          {
+            artist: 'John Baizley',
+            style: ''
+          },
+          {
+            artist: 'Anna and Elena Balbusso',
+            style: ''
+          },
+          {
+            artist: 'Walter Battiss',
+            style: ''
+          },
+          {
+            artist: 'Joanna Bauck',
+            style: ''
+          },
+          {
+            artist: 'Manjit Bawa',
+            style: ''
+          },
+          {
+            artist: 'Robert Bechtle',
+            style: 'photorealism, streetscape'
+          },
+          {
+            artist: 'Florianne Becker',
+            style: ''
+          },
+          {
+            artist: 'Rudolph Belarski',
+            style: 'scene, comics'
+          },
+          {
+            artist: 'Aase Berg',
+            style: ''
+          },
+          {
+            artist: 'Robert Bevan',
+            style: 'watercolor, landscape'
+          },
+          {
+            artist: 'Pascal Blanche',
+            style: ''
+          },
+          {
+            artist: 'Marguerite Blasingame',
+            style: ''
+          },
+          {
+            artist: 'Margaret Brundage',
+            style: ''
+          },
+          {
+            artist: 'Alexander Milne Calder',
+            style: 'sculpture'
+          },
+          {
+            artist: 'Giovanni Gabriele Cantone',
+            style: 'baroque, romanticism, portrait'
+          },
+          {
+            artist: 'Nacho Carbonell',
+            style: 'sculpture, light, installation'
+          },
+          {
+            artist: 'Henri Catargi',
+            style: 'impressionism, still life, landscape'
+          },
+          {
+            artist: 'Pierre-Mony Chan',
+            style: ''
+          },
+          {
+            artist: 'Zeen Chin',
+            style: ''
+          },
+          {
+            artist: 'Cassius Marcellus Coolidge',
+            style: 'scene, dogs'
+          },
+          {
+            artist: 'Kazimierz Dabrowski',
+            style: ''
+          },
+          {
+            artist: 'Sunil Das',
+            style: ''
+          },
+          {
+            artist: 'Alan Davis',
+            style: 'comics'
+          },
+          {
+            artist: 'Anthony Day',
+            style: ''
+          },
+          {
+            artist: 'Emmanuel de Critz',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Eric Deschamps',
+            style: 'fantasy, sci-fi, digital'
+          },
+          {
+            artist: 'Aleksandr Deyneka',
+            style: 'realism, expressionism'
+          },
+          {
+            artist: 'Alberto Dros',
+            style: 'photography, landscape, nature'
+          },
+          {
+            artist: 'Harrison Ellenshaw',
+            style: ''
+          },
+          {
+            artist: 'Ron Embleton',
+            style: 'comics, scene, detailed'
+          },
+          {
+            artist: 'Jimmy Ernst',
+            style: 'abstract, expressionism'
+          },
+          {
+            artist: 'Art Fitzpatrick',
+            style: 'cars, scene'
+          },
+          {
+            artist: 'Hannah Flowers',
+            style: ''
+          },
+          {
+            artist: 'Tsuguharu Foujita',
+            style: 'expressionism, magic realism'
+          },
+          {
+            artist: 'Anton Domenico Gabbiani',
+            style: 'baroque, scene'
+          },
+          {
+            artist: 'Lydia Goldblatt',
+            style: 'photography'
+          },
+          {
+            artist: 'Matt Granz',
+            style: ''
+          },
+          {
+            artist: 'Balcomb Greene',
+            style: ''
+          },
+          {
+            artist: 'Rick Griffin',
+            style: ''
+          },
+          {
+            artist: 'Mitch Griffiths',
+            style: 'realism, scene, portrait'
+          },
+          {
+            artist: 'Scott Gustafson',
+            style: 'storybook realism, whimsical, children\'s illustration'
+          },
+          {
+            artist: 'Bess Hamiti',
+            style: 'landscape, vibrant, magic realism'
+          },
+          {
+            artist: 'Werner Herzog',
+            style: 'film, personality'
+          },
+          {
+            artist: 'Kuang Hong',
+            style: 'fantasy, digital, dark'
+          },
+          {
+            artist: 'Judson Huss',
+            style: ''
+          },
+          {
+            artist: 'Tetsuya Ishida',
+            style: ''
+          },
+          {
+            artist: 'Jaroslaw Jasnikowski',
+            style: ''
+          },
+          {
+            artist: 'Miles Johnston',
+            style: ''
+          },
+          {
+            artist: 'Eddie Jones',
+            style: ''
+          },
+          {
+            artist: 'Lois Mailou Jones',
+            style: 'colorful, vibrant, melanin'
+          },
+          {
+            artist: 'Sven Jonson',
+            style: ''
+          },
+          {
+            artist: 'Kawacy',
+            style: ''
+          },
+          {
+            artist: 'Lisa Keene',
+            style: 'storybook realism'
+          },
+          {
+            artist: 'Felix Kelly',
+            style: ''
+          },
+          {
+            artist: 'Alfred Kelsner',
+            style: ''
+          },
+          {
+            artist: 'Robert Kirkman',
+            style: 'comics, dark'
+          },
+          {
+            artist: 'Prateep Kochabua',
+            style: ''
+          },
+          {
+            artist: 'Harue Koga',
+            style: ''
+          },
+          {
+            artist: 'Karl Kopinski',
+            style: ''
+          },
+          {
+            artist: 'Omri Koresh',
+            style: 'scene, dark, digital'
+          },
+          {
+            artist: 'Michael Kutsche',
+            style: 'character, fantasy, dark'
+          },
+          {
+            artist: 'Claude Lefebvre',
+            style: 'baroque, portrait'
+          },
+          {
+            artist: 'Robert Maguire',
+            style: 'scene, portrait'
+          },
+          {
+            artist: 'Victor Adame Minguez',
+            style: 'fantasy, character, digital'
+          },
+          {
+            artist: 'Ric Nagualero',
+            style: ''
+          },
+          {
+            artist: 'Katsushika Oi',
+            style: 'ukiyo-e'
+          },
+          {
+            artist: 'Yasutomo Oka',
+            style: ''
+          },
+          {
+            artist: 'Taro Okamoto',
+            style: ''
+          },
+          {
+            artist: 'Rafal Olbinski',
+            style: 'surrealism, cloudscape, figurativism'
+          },
+          {
+            artist: 'Glen Orbik',
+            style: ''
+          },
+          {
+            artist: 'Karla Ortiz',
+            style: ''
+          },
+          {
+            artist: 'Raffeaello Ossola',
+            style: ''
+          },
+          {
+            artist: 'Samson Pollem',
+            style: 'scene, comics'
+          },
+          {
+            artist: 'Arnoldo Pomodoro',
+            style: 'sculpture, detailed'
+          },
+          {
+            artist: 'Victor Prezio',
+            style: 'scene, character'
+          },
+          {
+            artist: 'Walter Quirt',
+            style: ''
+          },
+          {
+            artist: 'Anna Razumovskaya',
+            style: ''
+          },
+          {
+            artist: 'Jakub Rebelka',
+            style: 'surrealism, fantasy'
+          },
+          {
+            artist: 'Benjamin Sack',
+            style: ''
+          },
+          {
+            artist: 'De Es Schwertberger',
+            style: ''
+          },
+          {
+            artist: 'Gerard Sekoto',
+            style: 'impressionism, melanin'
+          },
+          {
+            artist: 'Wojciech Siudmak',
+            style: ''
+          },
+          {
+            artist: 'Arthur Skizhali-Weiss',
+            style: ''
+          },
+          {
+            artist: 'Leonard Starr',
+            style: ''
+          },
+          {
+            artist: 'Scott Samuel Summers',
+            style: 'character, comics'
+          },
+          {
+            artist: 'Suguru Tanaka',
+            style: ''
+          },
+          {
+            artist: 'Jean-Pierre Ugarte',
+            style: ''
+          },
+          {
+            artist: 'Philipp Urlich',
+            style: ''
+          },
+          {
+            artist: 'Vergvoktre',
+            style: ''
+          },
+          {
+            artist: 'Rinat Voligamsi',
+            style: 'surrealism, dark'
+          },
+          {
+            artist: 'Eduard Wiiralt',
+            style: ''
+          },
+          {
+            artist: 'Bec Winnel',
+            style: 'portrait, flowers'
+          },
+          {
+            artist: 'WLOP',
+            style: 'character, portrait, digital'
+          },
+          {
+            artist: 'Hedi Xandt',
+            style: ''
+          },
+          {
+            artist: 'Amir Zand',
+            style: 'sci-fi, digital, vibrant'
+          },
+          {
+            artist: 'Dariusz Zawadzki',
+            style: ''
+          },
+          {
+            artist: 'Doug Hyde',
+            style: 'whimsical, children\'s illustration, vibrant'
+          },
+          {
+            artist: 'David Wojnarowicz',
+            style: 'photography, collage'
+          },
+          {
+            artist: 'Howardena Pindell',
+            style: 'collage, colorful, expressionism'
+          },
+          {
+            artist: 'Stefan Kostic',
+            style: 'portraits, drawing, characters'
+          },
+          {
+            artist: 'Studio Ghibli',
+            style: 'animation, fantasy, character'
+          },
+        ]
+
+        const categoryGroups = [{
+            name: 'Scene',
+            items: [{
+                type: 'Quality',
+                options: ['16-Bit', '4k', '4k resolution', '8k', 'Aesthetic', 'Airbrush', 'Atmospheric', 'Award-Winning', 'Biophilic', 'Contest Winner',
+                  'Crystallized', 'Dystopian', 'Eldritch', 'Feline', 'Foreboding', 'Glass', 'Hallucinogenic', 'HD', 'HDR', 'High Definition',
+                  'High Resolution', 'Highly Detailed', 'HQ', 'Hyper Detailed', 'Hypomorphic', 'Infectious', 'Intricate', 'Intricate Artwork',
+                  'Intricate Details', 'Macabre', 'Masterpiece', 'Microscopic', 'Multiracial', 'Nebulous', 'Nvidia RTX', 'Oily', 'Powerful',
+                  'RTX', 'sfumato', 'Ultra Detailed', 'Hyper Realistic',
+                ],
+              },
+              {
+                type: 'Style',
+                options: ['Afrofuturism', 'Alluring', 'Amiga 500 style', 'Artstation', 'Atari 2600 style', 'Behance', 'Cgsociety', 'Chibi',
+                  'Closeup of Face', 'Clutter', 'Contemporary', 'Cybernatic and Sci-Fi', 'Cymatics', 'Der Blaue', 'Diorama', 'DMT',
+                  'Doodle', 'Egyptian Mythology', 'Ferrofluid', 'Fineartamerica', 'Fractal', 'Full Body', 'GLaDOS', 'Gothic and Fantasy',
+                  'Half Body', 'Hi-Fructose', 'Horror', 'Lomography', 'Magical', 'Memphis', 'Modern', 'Native American', 'NES Style', 'Pixiv',
+                  'Post-Apocalyptic', 'Spooky', 'Symmetry', 'Thangka', 'Trending on Artstation', 'Ukiyo-e', 'Vintage Illustration'
+                ],
+              },
+              {
+                type: 'Aesthetic',
+                options: ['1950s Suburbia', '70s Science Fiction', 'Animecore', 'Atompunk', 'Beatnik', 'Beautiful', 'Biomechanical', 'Biopunk',
+                  'Cassette Futurism', 'Chillwave', 'Cosmic Horror', 'Cosmic Nebulae', 'Cyberdelic', 'Cyberpop', 'Cyberpunk', 'Darkwave',
+                  'Deathpunk', 'Epic', 'Ethereal', 'Fauvism', 'Futuresynth', 'Futuristic', 'Glitchcore', 'Glowwave', 'Gorgeous', 'Goth',
+                  'Gothic', 'Hyperpop', 'Kawaii', 'Lunarpunk', 'Minecraftcore', 'Minimalism', 'Normcore', 'Paranormalpunk', 'Pixiecore',
+                  'Psychedelic', 'Regal', 'Retro-Futurism', 'Retrowave', 'Robloxcore', 'Sci-Fi', 'Science Fiction', 'Seapunk', 'Soft Grunge',
+                  'Solarpunk', 'Southern Gothic', 'Soviet Poster', 'Sovietwave', 'Sparklecore', 'Steampunk', 'Stunning', 'Trippy', 'Unicorncore',
+                  'Unimaginable Beauty', 'Vaporwave', 'Voidpunk', 'Weirdcore', 'Witchcore',
+                ],
+              },
+              {
+                type: 'Features',
+                options: ['Big Smile', 'Blonde Hair', 'Blue Hair', 'Brown Hair', 'Brunette', 'Freckles', 'Full Lips', 'Green Hair', 'Horns',
+                  'Large Eyes', 'Large Nose', 'Perfect Face', 'Pretty Face', 'Purple Hair', 'Red Hair', 'Rosy Cheeks', 'Slim Face', 'Slim Nose',
+                  'Small Eyes', 'Small Nose', 'Smiling', 'Soft Details', 'Strong Jaw', 'Symmetrical Face', 'Tattoos', 'White Hair', 'Wings',
+                  'Muscular', 'Symmetrical',
+                ],
+              },
+              {
+                type: 'Medium',
+                options: ['Batik', 'Board Game', 'Claymation', 'Coloring Book Style', 'Comic', 'Cyanotype', 'Daguerrotype', 'Demoscene', 'Digital Collage',
+                  'Digital Illustration', 'Digital Painting', 'En plein air', 'Encaustic', 'Fashion Editorial', 'Illustration', 'Isometric',
+                  'Isotype', 'Linocut', 'Manga', 'Matte Painting', 'Oil on Canvas', 'Papercraft', 'Pattachitra', 'Poster', 'Propaganda Poster',
+                  'Risograph', 'Sand Painting', 'Sketch', 'Stained Glass', 'Sticker', 'Tarot Card', 'Wallpaper', 'Woodblock', 'Woodblock Print'
+                ],
+              },
+              {
+                type: 'Setting',
+                options: ['Autumn', 'Cityscape', 'Cloudy Day', 'Edwardian', 'Overgrown', 'Rainy Day', 'Snow', 'Spring', 'Stormy Day', 'Summer', 'Sunny Day',
+                  'Tanjore', 'Thunder Clouds', 'Winter'
+                ],
+              },
+              {
+                type: 'Theme',
+                options: ['Album cover', 'Alien', 'Altered Carbon', 'Blade Runner 2049', 'Bloodborne', 'D&D', 'Dark Souls', 'Disney', 'DnD', 'Dreamworks',
+                  'Elden Ring', 'Hearthstone', 'Interstellar', 'LOTR', 'Nier Automata', 'RPG', 'Stranger Things', 'League of Legends',
+                ],
+              },
+            ],
+          },
+          {
+            name: 'Effects',
+            items: [{
+                type: 'Effects',
+                options: ['Bloom light effect', 'Bokeh effect', 'Cinematic Lighting', 'Grain effect', 'HDR Render', 'Lens flare effect', 'Light caustics effect',
+                  'Low shutter effect', 'Motion blur effect', 'Neon light effect', 'Photo Realistic', 'Realistic', 'Sharp Focus', 'Smooth', 'Soft Render', 'Volumetric light effect'
+                ],
+              },
+              {
+                type: 'CGI',
+                options: ['3D Rendering', 'Artgerm', 'CryEngine', 'Cycles', 'Cycles Render', 'Deviantart', 'Low poly',
+                  'Octane Render', 'Physically Based Render', 'Ray Tracing', 'Redshift Render', 'Renderman', 'Unity Engine', 'Unreal Engine', 'VRay'
+                ],
+              },
+              {
+                type: 'Filters',
+                options: ['Amaro filter', 'Black and White', 'Grayscale', 'Lark filter', 'Monochromatic Blue filter',
+                  'Monochromatic Purple filter', 'Monochromatic Red filter', 'Monochrome', 'Oversaturated', 'Sepia filter'
+                ],
+              },
+              {
+                type: 'Lenses',
+                options: ['Fisheye lens', 'Macro lens', 'Telephoto lens', 'Tilt-shift lens', 'Wide-angle lens', 'Zoom lens'],
+              },
+              {
+                type: 'Photography',
+                options: ['Aerial Photograph', 'Astrophotography', 'Centered', 'Closeup', 'Dehazed', 'Double Exposure', 'Glamour Shot', 'Haze Filter',
+                  'Headshot', 'High Speed Liquid Photography', 'Infrared', 'Lomo Effect', 'Long Exposure', 'Super Wide Angle', 'Tilt-Shift',
+                  'Underwater Photography', 'Unsplash', 'Unsplash Contest Winner', 'Velvia', 'Wide Angle', 'X-Ray Photography'
+                ],
+              },
+              {
+                type: 'Lighting',
+                options: ['Ambient Lighting', 'Ambient Occlusion', 'Backlight', 'Backlight Photo', 'Beautifully Lit', 'Bioluminescent', 'Broad Light',
+                  'Candle Light', 'Chiaroscuro lighting', 'Diffuse Lighting', 'Dim light', 'Dynamic Lighting', 'Fill Light', 'Flash Light',
+                  'Flat Light', 'Glow in the Dark', 'Golden Hour', 'High Key light', 'Iridescence', 'Light Diffraction', 'Lighting', 'Low Key Light',
+                  'Moody Lighting', 'Natural Light', 'Neon', 'Overcast light', 'Polarized Light', 'Radiant', 'Refraction', 'Soft Shaded', 'Split light',
+                  'Spotlight', 'Studio light', 'Tenebrism', 'Volumetric Lighting',
+                  'Crepuscular Rays', 'Soft Lighting',
+                ],
+              },
+              {
+                type: 'Color',
+                options: ['Acid Colors', 'Chromatic Aberration', 'Color Splash', 'Contrasting Colors', 'DayGlo', 'Desaturated', 'Dripping Colors',
+                  'Eye Strain', 'Fluo Colors', 'Gold Leaf', 'High Chroma', 'Holographic', 'Holography', 'Matte', 'Metallic', 'Monochromatic',
+                  'Primary Colors', 'Prismatic', 'Sepia', 'Vibrant Colors'
+                ],
+              },
+            ],
+          },
+          {
+            name: 'Art Style',
+            items: [{
+                type: 'Art Movement',
+                options: ['Aestheticism', 'Art Deco', 'Arte Povera', 'Ashcan school painting', 'Cubo-Futurism', 'Dada collage', 'De Stijl', 'Funk Art',
+                  'Futurism', 'Macchiaioli', 'Massurrealism', 'Mughal Painting', 'Naive', 'Pointillisme', 'Pre-Raphaelite', 'Renaissance', 'Tonalism',
+                  'Baroque', 'Surrealistic',
+                ],
+              },
+              {
+                type: 'Art Style',
+                options: ['Artwork', 'Bronze', 'Chalk Art', 'Closeup Portrait', 'Concept Art', 'Digital Art', 'Film Still', 'Ink Art', 'Landscape', 'Marble',
+                  'Oil Pastel', 'Pencil Art', 'Pixel Art', 'Portrait', 'Tempera', 'Vector Art', 'Voxel Art', 'Watercolor', 'Wood',
+                ],
+              },
+              {
+                type: '18 Century',
+                options: ['18th Century Colour Palette', 'Aacabre Fine Art', 'American Art', 'American Colonial Art', 'Aorbid Fine Art', 'Art Brut',
+                  'Dark Fine Art', 'English Landscape Painting', 'English Painting Figurative', 'Fine Art', 'Glitch Art', 'Gouache Painting',
+                  'Late Eighteenth Century Architecture', 'Lineart', 'Neoclassical Art', 'Petrine Art in Russia', 'Rococo Art', 'Rococo Artists',
+                  'Russian Painting', 'Russian Sculpture'
+                ],
+              },
+              {
+                type: '19 Century',
+                options: ['19th Century Colour Palette', '19th century English Figurative Painting', '19th century English Landscape Painting',
+                  '19th Century Portrait Art', '19th century Russian Painting', '19th Century Sculptors', 'Art Nouveau',
+                  'Arts and Crafts Movement', 'Australian Impressionism', 'Barbizon School of Landscape Painting', 'Berlin Secession',
+                  'Biedermeier Style', 'Cloisonnism', 'Design', 'Divisionism', 'Ecole de Paris', 'English Figurative Painting', 'Faberge Easter Eggs',
+                  'French Impressionism', 'Heidelberg School', 'Hudson River School', 'Impressionism', 'Italian Divisionism', 'Japonism', 'Jugendstil',
+                  'Les Nabis', 'Les Vingt', 'Luminism Landscape Painting', 'Munich Secession', 'Naturalism', 'Nazarenes', 'Neo-Impressionism',
+                  'Newlyn School', 'Norwich School of Landscape', 'Orientalist Painting', 'Pointillism', 'Post-Impressionist Painting',
+                  'Pre-Raphaelite Brotherhood', 'Primitivism', 'Realism to Impressionism', 'Realist Painting', 'Romanticism', 'Symbolism Art Movement',
+                  'Synthetism', 'Victorian Art', 'Vienna Secession', 'Wanderers Art Movement',
+                ],
+              },
+              {
+                type: '20 Century',
+                options: ['Abstract Expressionism', 'Abstract Sculptors', 'American Scene Painting', 'Animation', 'Armory Show of Modern Art', 'Ashcan School',
+                  'Assemblage', 'Ballets Russes', 'Bauhaus Design School', 'Biomorphic', 'Camden Town Group', 'Classical Revival in Modern Art',
+                  'Collage', 'Constructivism', 'Cubism', 'Dada', 'Degenerate Art', 'Deutscher Werkbund', 'Die Neue Sachlichkeit',
+                  "Donkey's Tail Russian Artists Group", 'Elementarism', 'Expressionism', 'Fauvist Painters', 'Kinetic Art',
+                  'Knave of Diamonds Russian Artists Group', 'Metaphysical Painting', 'Modern Art', 'Neo-Dada', 'Neo-Plasticism',
+                  'Nouveau Realisme', 'Op-Art', 'Orphism', 'Pop Art', 'Precisionism', 'Rayonism', 'Regionalism', 'Social Realism', 'Socialist Realism', 'St Ives School', 'Suprematism', 'Surrealism', 'Synchromism', 'Vorticism',
+                ],
+              },
+              {
+                type: '21 Century',
+                options: ['3D art', 'Abstract colors', 'Anime', 'Anti-art', 'asian art', 'Caricatures', 'Cartoon', 'Comics', 'Contemporary art', 'Dieselpunk',
+                  'Etch', 'Fantasy', 'Folk art', 'Mannerism', 'Native art', 'Portraiture', 'Postmodern art', 'Realism', 'Stuckism', 'Symbolism', 'Visionar',
+                ],
+              },
+            ],
+          },
+          {
+            name: 'Mood',
+            items: [{
+                type: 'Positive Mood',
+                options: ['Balmy', 'Brash', 'Bright', 'Calm', 'Colorful', 'Comforting', 'Cozy', 'Delicate', 'Dynamic', 'Ecstatic', 'Elegant', 'Energetic', 'Enlightenment',
+                  'Exciting', 'Expressive', 'Graceful', 'Hot', 'Joyful', 'Kaleidoscopic', 'Light', 'Lively', 'Mild', 'Passionate', 'Pastel', 'Peaceful', 'Quiet',
+                  'Relaxed', 'Rich', 'Romantic', 'Saturated', 'Serene', 'Soft', 'Soothing', 'Spirited', 'Subtle', 'Tender', 'Tranquil', 'Vibrant', 'Vivid',
+                ],
+              },
+              {
+                type: 'Negative Mood',
+                options: ['Apocalyptic', 'Bleak', 'Dark', 'Depressing', 'Dismal', 'Doom', 'Dreadful', 'Dreary', 'Dull', 'Forbidding', 'Frightful', 'Funeral', 'Ghastly',
+                  'Ghostly', 'Gloomy', 'Grey', 'Harrowing', 'Haunting', 'Hideous', 'Melancholic', 'Mournful', 'Muted', 'Ominous', 'Pale', 'Sad', 'Shadowy',
+                  'Shocking', 'Sinister', 'Somber', 'Stormy', 'Subdued', 'Terrifying', 'Terror', 'Threatening', 'Tired', 'Unnerving', 'Washed-out', 'Weary',
+                ],
+              },
+            ],
+          },
+        ]
+        const artistList = []
+        artistStyle.forEach(option => {
+          artistList.push({
+            value: option.artist,
+            label: `${option.artist} -- ${option.style}`,
+          })
+        })
+        const modifierList = []
+        categoryGroups.forEach(group => {
+          group.items.forEach(item => {
+            item.options.forEach(option => {
+              modifierList.push({
+                value: option,
+                label: option,
+              })
+            })
+          })
+        })
+
+
+        return {
+          modelInput: '',
+          imgPrompt: '',
+          negativePrompt: '',
+          isLoading: false,
+          generatedImageUrl: '',
+          modelList,
+          artistStyle,
+          categoryGroups,
+          modelName: 'Deliberate',
+          artistList,
+          modifierList,
+          artistFilter: [],
+          modifierFilter: []
+        };
+      },
+      methods: {
+        getFinalPrompt() {
+          let artistStyle = ''
+          if (this.artistFilter.length === 0) {
+            artistStyle = '' // Ensure imgPrompt is not null
+          } else {
+            artistStyle = `, Artists Style: ${this.artistFilter.map(artist => artist).join(', ')}`
+          }
+          let modifierStyle = ''
+          if (this.modifierFilter.length === 0) {
+            modifierStyle = ''
+          } else {
+            modifierStyle = `, ${this.modifierFilter.map(modifier => modifier).join('. ')}`
+          }
+
+          return `${imgPrompt.value || ''}${artistStyle}${modifierStyle}`
+        },
+        async generateImage() {
+          try {
+            this.isLoading = true;
+            const finalPrompt = this.getFinalPrompt()
+            const data = {
+              prompt: finalPrompt,
+              negative_prompt: this.negativePrompt,
+              models: [this.modelName],
+            };
+
+            const requestData = {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'ApiKey': '0000000000'
+              },
+              body: JSON.stringify(data),
+            };
+
+            const response = await fetch('https://stablehorde.net/api/v2/generate/async', requestData);
+
+            if (response.ok) {
+              const responseData = await response.json();
+              const imageId = responseData["id"];
+
+              let continueCheck = true;
+              do {
+                const checkImageResponse = await fetch('https://stablehorde.net/api/v2/generate/check/' + imageId);
+                const imageResponseData = await checkImageResponse.json();
+                const finishedStatus = imageResponseData["finished"];
+                if (finishedStatus === 1)
+                  continueCheck = false;
+                await new Promise(resolve => setTimeout(resolve, 500 + Math.floor(Math.random() * 1500)));
+              } while (continueCheck);
+
+              const imageStatusResponse = await fetch('https://stablehorde.net/api/v2/generate/status/' + imageId);
+              const resJSON = await imageStatusResponse.json();
+
+              if (resJSON.generations) {
+                this.generatedImageUrl = resJSON.generations[0].img;
+              }
+
+            } else {
+              alert(`Error: ${response.status} - ${response.statusText}`);
+            }
+          } catch (error) {
+            alert('An error occurred:', error);
+          } finally {
+            this.isLoading = false;
+          }
+        }
+      }
+    });
+  </script>
+  <style>
+    body {
+      font-family: Montserrat, Helvetica, Arial, serif;
+    }
+
+    .form-check-input {
+      width: unset;
+      height: unset;
+    }
+
+    .nav-tabs {
+      border-bottom: 0 solid #dae1e7
+    }
+
+    .nav-tabs .nav-link {
+      margin-bottom: 0;
+      background-color: transparent;
+      border: 0 solid transparent
+    }
+
+    .nav-tabs .nav-link,
+    [dir=rtl] .nav-tabs .nav-link {
+      border-top-left-radius: .25;
+      border-top-right-radius: .25
+    }
+
+    .nav-tabs .nav-link:focus,
+    .nav-tabs .nav-link:hover {
+      isolation: isolate
+    }
+
+    .nav-tabs .nav-link:focus,
+    .nav-tabs .nav-link:hover {
+      border-color: #ededed #ededed #dae1e7
+    }
+
+    .nav-tabs .nav-link.disabled {
+      color: #b9b9c3
+    }
+
+    .nav-tabs .nav-link.disabled {
+      background-color: transparent;
+      border-color: transparent
+    }
+
+    .nav-tabs .nav-item.show .nav-link,
+    .nav-tabs .nav-link.active {
+      color: #7367f0
+    }
+
+    .nav-tabs .nav-item.show .nav-link,
+    .nav-tabs .nav-link.active {
+      background-color: transparent;
+      border-color: #dae1e7 #dae1e7 transparent
+    }
+
+    .nav-tabs .dropdown-menu {
+      margin-top: 0
+    }
+
+    .nav-tabs .dropdown-menu,
+    [dir=rtl] .nav-tabs .dropdown-menu {
+      border-top-left-radius: 0;
+      border-top-right-radius: 0
+    }
+
+    .nav-tabs {
+      position: relative
+    }
+
+    .nav-tabs {
+      margin-bottom: 1rem
+    }
+
+    .nav-tabs .nav-item {
+      position: relative
+    }
+
+    .nav-tabs .nav-link {
+      color: #6e6b7b;
+      min-width: auto;
+      font-weight: 450;
+      position: relative;
+      overflow: hidden
+    }
+
+    .nav-tabs .nav-link {
+      border: none !important;
+      padding: .61rem 1.2rem;
+      border-radius: 0 !important
+    }
+
+    .nav-tabs .nav-link:after {
+      content: "" !important;
+      position: absolute;
+      bottom: 0;
+      width: 100%;
+      height: 3px;
+      transition: transform .3s
+    }
+
+    .nav-tabs .nav-link:after {
+      transform: translate3d(0, 150%, 0)
+    }
+
+    .nav-tabs .nav-link:after {
+      left: 0;
+      background: linear-gradient(30deg, #7367f0, rgba(115, 103, 240, .5)) !important
+    }
+
+    [dir=rtl] .nav-tabs .nav-link:after {
+      right: 0;
+      background: linear-gradient(-30deg, #7367f0, rgba(115, 103, 240, .5)) !important
+    }
+
+    .nav-tabs .nav-link.active {
+      position: relative;
+      color: #7367f0
+    }
+
+    .nav-tabs .nav-link.active:after {
+      transform: translateZ(0)
+    }
+
+    .nav-vertical .nav.nav-tabs .nav-item .nav-link.active:after {
+      top: 1.25rem;
+      width: 2.14rem;
+    }
+
+    .nav-tabs .nav-link.dropdown-toggle:after {
+      top: 1px
+    }
+
+    .nav-tabs .nav-link.dropdown-toggle:after {
+      left: 1px
+    }
+
+    [dir=rtl] .nav-tabs .nav-link.dropdown-toggle:after {
+      right: 1px
+    }
+
+    .nav-tabs.nav-justified {
+      width: 100%
+    }
+
+    .nav-tabs.nav-justified .nav-item {
+      float: none
+    }
+
+    .nav-tabs.nav-justified .nav-link {
+      text-align: center;
+      margin-bottom: 5px
+    }
+
+    .nav-tabs.nav-justified>.dropdown .dropdown-menu {
+      top: auto
+    }
+
+    .nav-tabs.nav-justified>.dropdown .dropdown-menu {
+      left: auto
+    }
+
+    [dir=rtl] .nav-tabs.nav-justified>.dropdown .dropdown-menu {
+      right: auto
+    }
+
+    @media(min-width: 576px) {
+      .nav-tabs.nav-justified .nav-item {
+        display: block;
+        width: 1%
+      }
+
+      .nav-tabs.nav-justified .nav-link {
+        margin-bottom: 0
+      }
+    }
+
+    .nav-tabs.nav-justified .nav-link {
+      border-radius: .357rem
+    }
+
+    .nav-tabs.nav-justified .nav-link {
+      margin-right: 0
+    }
+
+    [dir=rtl] .nav-tabs.nav-justified .nav-link {
+      margin-left: 0
+    }
+
+    @media(min-width: 576px) {
+
+      .nav-tabs.nav-justified .nav-link.active,
+      .nav-tabs.nav-justified .nav-link.active:focus,
+      .nav-tabs.nav-justified .nav-link.active:hover {
+        border-bottom-color: transparent
+      }
+    }
+
+    .nav-tabs.nav-justified .nav-item a.nav-link {
+      display: block
+    }
+
+    .nav-tabs.nav-justified .nav-item a.nav-link {
+      border-radius: 0
+    }
+
+    .nav-tabs.nav-justified .nav-item a.nav-link.active {
+      border: none
+    }
+
+    .nav-tabs.nav-justified .nav-item a.nav-link:hover {
+      border-color: transparent
+    }
+
+    .nav-vertical {
+      overflow: hidden
+    }
+
+    .nav-vertical .nav.nav-tabs .nav-item .nav-link {
+      margin-bottom: 0
+    }
+
+    .nav-vertical .nav.nav-tabs .nav-item .nav-link:after {
+      transform: rotate(90deg) translate3d(0, 150%, 0);
+      left: 70%
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs .nav-item .nav-link:after {
+      transform: rotate(-90deg) translate3d(0, 150%, 0);
+      right: 70%
+    }
+
+    .nav-vertical .nav.nav-tabs .nav-item .nav-link.active:after {
+      top: 1.25rem;
+      width: 2.14rem
+    }
+
+    .nav-vertical .nav.nav-tabs .nav-item .nav-link.active:after {
+      left: auto;
+      right: -1.4rem;
+      transform: rotate(90deg) translate3d(0, 225%, 0)
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs .nav-item .nav-link.active:after {
+      right: auto;
+      left: -1.4rem;
+      transform: rotate(-90deg) translate3d(0, 225%, 0)
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-left {
+      display: table
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-left {
+      float: left;
+      margin-right: 1rem
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs.nav-left {
+      float: right;
+      margin-left: 1rem
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-left~.tab-content .tab-pane {
+      display: none;
+      overflow-y: auto
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-left~.tab-content .tab-pane {
+      padding-left: 1rem
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs.nav-left~.tab-content .tab-pane {
+      padding-right: 1rem
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-left~.tab-content .tab-pane.active {
+      display: block
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right {
+      display: table
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right {
+      float: right;
+      margin-left: 1rem
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs.nav-right {
+      float: left;
+      margin-right: 1rem
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right .nav-item .nav-link.active:after {
+      left: -.9rem;
+      transform: rotate(90deg) translate3d(0, 10%, 0)
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs.nav-right .nav-item .nav-link.active:after {
+      right: -.9rem;
+      transform: rotate(-90deg) translate3d(0, 10%, 0)
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right~.tab-content .tab-pane {
+      display: none;
+      overflow-y: auto
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right~.tab-content .tab-pane {
+      padding-right: 1rem
+    }
+
+    [dir=rtl] .nav-vertical .nav.nav-tabs.nav-right~.tab-content .tab-pane {
+      padding-left: 1rem
+    }
+
+    .nav-vertical .nav.nav-tabs.nav-right~.tab-content .tab-pane.active {
+      display: block
+    }
+
+    label {
+      color: #5e5873;
+      font-size: .757rem;
+    }
+
+    textarea::placeholder {
+      color: #82868b !important;
+    }
+
+    input::placeholder {
+      color: #82868b !important;
+    }
+  </style>
+</body>
+
+</html>
